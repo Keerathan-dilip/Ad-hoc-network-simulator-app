@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [history, setHistory] = useState<{ nodes: Node[]; connections: Connection[] }[]>([]);
+  const [clusterHeadIds, setClusterHeadIds] = useState<string[]>([]);
   const MAX_HISTORY_SIZE = 20;
 
   const saveSnapshot = useCallback(() => {
@@ -66,7 +67,15 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow p-4 lg:p-6">
-        {activeWorkspace === Workspace.CODE && <CodeEditorWorkspace nodes={nodes} connections={connections} />}
+        {activeWorkspace === Workspace.CODE && (
+            <CodeEditorWorkspace 
+                nodes={nodes} 
+                connections={connections}
+                setNodes={setNodes}
+                setConnections={setConnections}
+                setClusterHeadIds={setClusterHeadIds}
+            />
+        )}
         {activeWorkspace === Workspace.VISUAL && (
           <VisualBuilderWorkspace
             nodes={nodes}
@@ -74,6 +83,8 @@ const App: React.FC = () => {
             connections={connections}
             setConnections={setConnections}
             saveSnapshot={saveSnapshot}
+            clusterHeadIds={clusterHeadIds}
+            setClusterHeadIds={setClusterHeadIds}
           />
         )}
       </main>

@@ -6,11 +6,14 @@ import { SimulationParameters, Node, Connection } from '../types';
 import CodeDisplay from './CodeDisplay';
 import { networkAnalysisService } from '../services/networkAnalysisService';
 import { codeGenerationService } from '../services/codeGenerationService';
-
+import Chatbot from './Chatbot';
 
 interface CodeEditorWorkspaceProps {
   nodes: Node[];
   connections: Connection[];
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
+  setClusterHeadIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 type ResultsTab = 'charts' | 'awk';
@@ -44,7 +47,7 @@ const MetricChart: React.FC<{ data: any }> = ({ data }) => {
     );
 };
 
-const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connections }) => {
+const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connections, setNodes, setConnections, setClusterHeadIds }) => {
   const [simulationData, setSimulationData] = useState<any[] | null>(null);
   const [awkOutput, setAwkOutput] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -242,6 +245,11 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
           )}
         </div>
       </div>
+      <Chatbot 
+        setNodes={setNodes}
+        setConnections={setConnections}
+        setClusterHeadIds={setClusterHeadIds}
+      />
     </div>
   );
 };

@@ -1,5 +1,7 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Node, Connection, NetworkComponentType, NetworkTopology, AnimatedPacket, DeliveredPacketInfo } from '../types';
+import { Node, Connection, NetworkComponentType, NetworkTopology, AnimatedPacket, DeliveredPacketInfo, SimulationParameters } from '../types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import NetworkCanvas from './NetworkCanvas';
 import Toolbar from './Toolbar';
 import PropertiesPanel from './PropertiesPanel';
@@ -10,6 +12,7 @@ import { geminiService } from '../services/geminiService';
 import { pathfindingService } from '../services/pathfindingService';
 import AIInsightsPanel from './AIInsightsPanel';
 import PacketDeliveryLog from './PacketDeliveryLog';
+import { networkGenerationService } from '../services/networkGenerationService';
 
 const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
 const PACKET_ANIMATION_DURATION_AI = 4000; // ms
@@ -92,36 +95,19 @@ interface VisualBuilderWorkspaceProps {
     connections: Connection[];
     setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
     saveSnapshot: () => void;
+    clusterHeadIds: string[];
+    setClusterHeadIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-const FormattedDescription: React.FC<{ text: string }> = ({ text }) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part.length > 0);
-  
-    return (
-      <p className="text-sm text-gray-300 whitespace-pre-wrap">
-        {parts.map((part, index) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return (
-              <strong key={index} className="font-bold text-cyan-400">
-                {part.substring(2, part.length - 2)}
-              </strong>
-            );
-          }
-          return <span key={index}>{part}</span>;
-        })}
-      </p>
-    );
-};
-
-const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections, saveSnapshot }) => {
+const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections, saveSnapshot, clusterHeadIds, setClusterHeadIds }) => {
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   
-  const [analysisResult, setAnalysisResult] = useState<{ topology: string; description: string } | null>(null);
   const [simulationParams, setSimulationParams] = useState<any | null>(null);
-  const [insights, setInsights] = useState<string | null>(null);
+  const [analysisContent, setAnalysisContent] = useState<string | null>(null);
+  const [identifiedTopology, setIdentifiedTopology] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+
   const [isConnectionMode, setIsConnectionMode] = useState(false);
   const [isPacketSimulationMode, setIsPacketSimulationMode] = useState(false);
   const [packetSimSourceNodes, setPacketSimSourceNodes] = useState<string[]>([]);
@@ -136,7 +122,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [isReportUpdating, setIsReportUpdating] = useState(false);
   const [packetMessage, setPacketMessage] = useState('This is a test packet transmission. Data integrity check: SUCCESS.');
   const [deliveredPackets, setDeliveredPackets] = useState<DeliveredPacketInfo[]>([]);
-  const analysisDownloadRef = useRef<HTMLDivElement>(null);
   const reportDashboardRef = useRef<HTMLDivElement>(null);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [nodeInitialPositions, setNodeInitialPositions] = useState<Map<string, {x: number, y: number}> | null>(null);
@@ -146,7 +131,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [droppedPacketEvents, setDroppedPacketEvents] = useState<{ id: string, x: number, y: number }[]>([]);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [networkDataToSave, setNetworkDataToSave] = useState('');
-  const [clusterHeadIds, setClusterHeadIds] = useState<string[]>([]);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,9 +160,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   }, [setNodes, nodeInitialPositions]);
 
   const clearAnalysis = useCallback(() => {
-    setAnalysisResult(null);
+    setAnalysisContent(null);
+    setIdentifiedTopology(null);
     setSimulationParams(null);
-    setInsights(null);
     setAnimatedPackets([]);
     setSelectedConnectionId(null);
     setHasAnalyzedOnce(false);
@@ -328,9 +312,11 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     }
   }, [animationLoop]);
 
-  const startAnalysisPacketAnimation = (path: string[], pathTrad: string[]) => {
+  const startAnalysisPacketAnimation = (path: string[], pathTrad: string[], topology: string) => {
     const startTime = performance.now();
     const newPackets: AnimatedPacket[] = [];
+    
+    const pathOptions = { clusterHeadIds, topology };
 
     if (path) newPackets.push({ id: 'packet-ai', path, progress: 0, color: '#22d3ee', startTime, duration: PACKET_ANIMATION_DURATION_AI, message: "AI protocol test packet." });
     if (pathTrad) newPackets.push({ id: 'packet-trad', path: pathTrad, progress: 0, color: '#f97316', startTime, duration: PACKET_ANIMATION_DURATION_TRADITIONAL, message: "Traditional protocol test packet." });
@@ -429,9 +415,13 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const maliciousNodeIds = nodes.filter(n => n.isMalicious).map(n => n.id);
         const newPackets: AnimatedPacket[] = [];
         const sourceNodeId = nodeId;
+        
+        const topology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
+        const pathOptions = { excludeNodeIds: maliciousNodeIds, clusterHeadIds, topology };
+        const pathTradOptions = { clusterHeadIds, topology };
 
-        const pathAI = pathfindingService.findShortestPath(sourceNodeId, destinationNodeId, nodes, connections, maliciousNodeIds);
-        const pathTrad = pathfindingService.findShortestPath(sourceNodeId, destinationNodeId, nodes, connections);
+        const pathAI = pathfindingService.findShortestPath(sourceNodeId, destinationNodeId, nodes, connections, pathOptions);
+        const pathTrad = pathfindingService.findShortestPath(sourceNodeId, destinationNodeId, nodes, connections, pathTradOptions);
 
         if (pathAI) {
             newPackets.push({
@@ -542,311 +532,32 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       alert('The maximum number of nodes is 450.');
       return;
     }
+    if (!canvasViewportRef.current) return;
+
     saveSnapshot();
     clearAnalysis();
-    setClusterHeadIds([]);
-    let newNodes: Node[] = [];
-    let newConnections: Connection[] = [];
-    const canvasEl = canvasRef.current;
-    const viewportEl = canvasViewportRef.current;
     
-    // Generate within the visible viewport area, starting from the top-left.
-    const padding = 80; // Margin from the edges of the viewport
-    const canvasWidth = viewportEl ? viewportEl.clientWidth - padding * 2 : 1000;
-    const canvasHeight = viewportEl ? viewportEl.clientHeight - padding * 2 : 600;
-    const offsetX = padding;
-    const offsetY = padding;
+    const { clientWidth, clientHeight } = canvasViewportRef.current;
+    const { nodes: newNodes, connections: newConnections, clusterHeadIds: newClusterHeadIds } = 
+        networkGenerationService.generateNetworkLayout(
+            count,
+            topology,
+            includeRouters,
+            includeSwitches,
+            numClusterHeads,
+            { width: clientWidth, height: clientHeight }
+        );
 
-    const createNode = (i: number, x: number, y: number, type: NetworkComponentType = NetworkComponentType.NODE): Node => {
-        const base = {
-            id: `${type.toLowerCase()}-${Date.now()}-${i}`, type, x: x + offsetX, y: y + offsetY,
-            ipAddress: `192.168.1.${i + 1}`, isMalicious: false,
-        };
-        switch (type) {
-            case NetworkComponentType.ROUTER: return { ...base, energyEfficiency: 100, energySpent: 25, packetForwardingCapacity: 5000 };
-            case NetworkComponentType.SWITCH: return { ...base, energyEfficiency: 100, energySpent: 10, portCount: 16, isEnabled: true };
-            case NetworkComponentType.BASE_STATION: return { ...base, energyEfficiency: 100, energySpent: 50, isReceiver: true };
-            default: return { ...base, energyEfficiency: Math.round(80 + Math.random() * 20), energySpent: Math.round(Math.random() * 10) + 5 };
-        }
-    };
-    
-    if (topology === 'cluster' || topology === 'cluster-mesh') {
-        const actualNumClusterHeads = Math.max(1, numClusterHeads);
-        if (count <= actualNumClusterHeads) {
-            alert('Node count must be greater than the number of cluster heads.');
-            return;
-        }
-
-        const numEndNodes = count - actualNumClusterHeads;
-        const clusterHubs: Node[] = [];
-
-        const baseStation = createNode(count, canvasWidth / 2, padding / 2, NetworkComponentType.BASE_STATION);
-        newNodes.push(baseStation);
-        
-        const clusterHeadType = includeRouters ? NetworkComponentType.ROUTER : NetworkComponentType.NODE;
-
-        for (let c = 0; c < actualNumClusterHeads; c++) {
-            const angle = (c / actualNumClusterHeads) * 2 * Math.PI;
-            const radiusX = canvasWidth / 3;
-            const radiusY = canvasHeight / 3;
-            const hubX = canvasWidth / 2 + radiusX * Math.cos(angle);
-            const hubY = canvasHeight / 2 + radiusY * Math.sin(angle);
-            const clusterHub = createNode(numEndNodes + c, hubX, hubY, clusterHeadType);
-            newNodes.push(clusterHub);
-            clusterHubs.push(clusterHub);
-        }
-        setClusterHeadIds(clusterHubs.map(hub => hub.id));
-
-        const allClusterNodes: Node[][] = Array.from({ length: clusterHubs.length }, () => []);
-        let nodesPlaced = 0;
-
-        for (let c = 0; c < clusterHubs.length; c++) {
-            const clusterHub = clusterHubs[c];
-            allClusterNodes[c].push(clusterHub);
-            const clusterRadius = Math.min(canvasWidth, canvasHeight) / (clusterHubs.length * 1.8);
-            const nodesInThisCluster = c === clusterHubs.length - 1 ? numEndNodes - nodesPlaced : Math.floor(numEndNodes / clusterHubs.length);
-
-            for (let i = 0; i < nodesInThisCluster; i++) {
-                const angle = Math.random() * 2 * Math.PI;
-                const radius = Math.random() * clusterRadius;
-                const node = createNode(nodesPlaced, clusterHub.x - offsetX + Math.cos(angle) * radius, clusterHub.y - offsetY + Math.sin(angle) * radius);
-                newNodes.push(node);
-                allClusterNodes[c].push(node);
-                if (topology === 'cluster') {
-                    newConnections.push({ id: `${node.id}-${clusterHub.id}-${Date.now()}`, from: node.id, to: clusterHub.id });
-                }
-                nodesPlaced++;
-            }
-        }
-        
-        if (topology === 'cluster-mesh') {
-             const K_NEAREST_IN_CLUSTER = 3;
-            allClusterNodes.forEach(cluster => {
-                if(cluster.length < 2) return;
-                cluster.forEach(sourceNode => {
-                    const distances = cluster
-                        .filter(n => n.id !== sourceNode.id)
-                        .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
-                        .sort((a, b) => a.dist - b.dist);
-                    
-                    for (let k = 0; k < Math.min(K_NEAREST_IN_CLUSTER, distances.length); k++) {
-                        const targetNodeId = distances[k].id;
-                        const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
-                        if (!exists) {
-                            newConnections.push({ id: `${sourceNode.id}-${targetNodeId}-${Date.now()}`, from: sourceNode.id, to: targetNodeId });
-                        }
-                    }
-                });
-            });
-        }
-        
-        for(let i = 0; i < clusterHubs.length; i++) {
-            newConnections.push({ id: `${clusterHubs[i].id}-${baseStation.id}-${Date.now()}`, from: clusterHubs[i].id, to: baseStation.id });
-            for (let j = i + 1; j < clusterHubs.length; j++) {
-                newConnections.push({ id: `${clusterHubs[i].id}-${clusterHubs[j].id}-${Date.now()}`, from: clusterHubs[i].id, to: clusterHubs[j].id });
-            }
-        }
-
-    } else if (topology === 'random' || topology === 'mesh') {
-        const baseStation = createNode(count, canvasWidth / 2, padding, NetworkComponentType.BASE_STATION);
-        newNodes.push(baseStation);
-
-        const numRouters = includeRouters ? Math.max(1, Math.floor(count / 25)) : 0;
-        const numSwitches = includeSwitches ? Math.max(1, Math.floor(count / 30)) : 0;
-        const numEndNodes = count - numRouters - numSwitches;
-
-        for (let i = 0; i < numEndNodes; i++) newNodes.push(createNode(i, Math.random() * canvasWidth, Math.random() * (canvasHeight - padding) + padding));
-        for (let i = 0; i < numRouters; i++) newNodes.push(createNode(numEndNodes + i, Math.random() * canvasWidth, Math.random() * (canvasHeight - padding) + padding, NetworkComponentType.ROUTER));
-        for (let i = 0; i < numSwitches; i++) newNodes.push(createNode(numEndNodes + numRouters + i, Math.random() * canvasWidth, Math.random() * (canvasHeight- padding) + padding, NetworkComponentType.SWITCH));
-        
-        const infraNodes = newNodes.filter(n => n.type !== NetworkComponentType.NODE);
-        const endNodes = newNodes.filter(n => n.type === NetworkComponentType.NODE);
-
-        for (let i = 0; i < infraNodes.length; i++) {
-            for (let j = i + 1; j < infraNodes.length; j++) {
-                newConnections.push({ id: `${infraNodes[i].id}-${infraNodes[j].id}-${Date.now()}`, from: infraNodes[i].id, to: infraNodes[j].id });
-            }
-        }
-        
-        endNodes.forEach(node => {
-            const potentialTargets = [...infraNodes, ...endNodes.filter(n => n.id !== node.id)];
-            if(potentialTargets.length === 0) return;
-            potentialTargets.sort((a, b) => (Math.hypot(a.x - node.x, a.y - node.y) - Math.hypot(b.x - node.x, b.y - node.y)));
-            const target = potentialTargets[0];
-            newConnections.push({ id: `${node.id}-${target.id}-${Date.now()}`, from: node.id, to: target.id });
-        });
-
-        if (topology === 'mesh') {
-            const K_NEAREST = 3;
-            const meshableNodes = newNodes.filter(n => n.type !== NetworkComponentType.BASE_STATION);
-            meshableNodes.forEach(sourceNode => {
-                const distances = meshableNodes
-                    .filter(n => n.id !== sourceNode.id)
-                    .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
-                    .sort((a, b) => a.dist - b.dist);
-                
-                for (let k = 0; k < Math.min(K_NEAREST, distances.length); k++) {
-                    const targetNodeId = distances[k].id;
-                    const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
-                    if (!exists) {
-                       newConnections.push({ id: `${sourceNode.id}-${targetNodeId}-${Date.now()}`, from: sourceNode.id, to: targetNodeId });
-                    }
-                }
-            });
-        }
-    } else if (topology === 'grid') {
-        const baseStation = createNode(count, canvasWidth / 2, padding, NetworkComponentType.BASE_STATION);
-        newNodes.push(baseStation);
-        
-        const numRouters = includeRouters ? Math.max(1, Math.floor(count / 25)) : 0;
-        const cols = Math.ceil(Math.sqrt(count * (canvasWidth / canvasHeight)));
-        const rows = Math.ceil(count / cols);
-        const xSpacing = canvasWidth / (cols + 1);
-        const ySpacing = (canvasHeight - padding * 2) / (rows + 1);
-        let routerPlaced = 0;
-        const gridNodes: Node[] = [];
-
-        for (let i = 0; i < count; i++) {
-            const row = Math.floor(i / cols);
-            const col = i % cols;
-            const x = (col + 1) * xSpacing;
-            const y = (row + 1) * ySpacing + padding;
-
-            if (includeRouters && routerPlaced < numRouters && row > 0 && col > 0 && row < rows -1 && col < cols - 1 && (row % 3 === 1 && col % 3 === 1)) {
-                 gridNodes.push(createNode(i, x, y, NetworkComponentType.ROUTER));
-                 routerPlaced++;
-            } else {
-                 gridNodes.push(createNode(i, x, y));
-            }
-        }
-        newNodes.push(...gridNodes);
-
-        // Add grid connections
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const currentIndex = r * cols + c;
-                if (currentIndex >= gridNodes.length) continue;
-                const currentNode = gridNodes[currentIndex];
-
-                // Connect to right neighbor
-                if (c < cols - 1) {
-                    const rightIndex = r * cols + (c + 1);
-                    if (rightIndex < gridNodes.length) {
-                        const rightNode = gridNodes[rightIndex];
-                        newConnections.push({ id: `conn-grid-${currentNode.id}-${rightNode.id}`, from: currentNode.id, to: rightNode.id });
-                    }
-                }
-
-                // Connect to bottom neighbor
-                if (r < rows - 1) {
-                    const bottomIndex = (r + 1) * cols + c;
-                    if (bottomIndex < gridNodes.length) {
-                        const bottomNode = gridNodes[bottomIndex];
-                        newConnections.push({ id: `conn-grid-${currentNode.id}-${bottomNode.id}`, from: currentNode.id, to: bottomNode.id });
-                    }
-                }
-            }
-        }
-
-        if (gridNodes.length > 0) {
-            gridNodes.sort((a,b) => Math.hypot(a.x - baseStation.x, a.y - baseStation.y) - Math.hypot(b.x - baseStation.x, b.y - baseStation.y));
-            const closestNode = gridNodes[0];
-            newConnections.push({ id: `${baseStation.id}-${closestNode.id}-${Date.now()}`, from: baseStation.id, to: closestNode.id });
-        }
-    } else if (topology === 'ring' || topology === 'bus') {
-        const centerX = canvasWidth / 2;
-        const centerY = canvasHeight / 2;
-        const baseStation = createNode(count, centerX, padding, NetworkComponentType.BASE_STATION);
-        
-        const topologyNodes: Node[] = [];
-
-        if (topology === 'ring') {
-            const radiusX = canvasWidth / 2 - padding;
-            const radiusY = canvasHeight / 2 - padding;
-            for (let i = 0; i < count; i++) {
-                const angle = (i / count) * 2 * Math.PI;
-                topologyNodes.push(createNode(i, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle)));
-            }
-            for (let i = 0; i < count; i++) {
-                newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[(i + 1) % count].id });
-            }
-        } else { // Bus
-            const xSpacing = canvasWidth / (count + 1);
-            for (let i = 0; i < count; i++) {
-                topologyNodes.push(createNode(i, (i + 1) * xSpacing, centerY));
-            }
-            for (let i = 0; i < count - 1; i++) {
-                newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[i + 1].id });
-            }
-        }
-        
-        if (topologyNodes.length > 0) {
-            topologyNodes.sort((a,b) => Math.hypot(a.x - baseStation.x, a.y - baseStation.y) - Math.hypot(b.x - baseStation.x, b.y - baseStation.y));
-            newConnections.push({ id: `${baseStation.id}-${topologyNodes[0].id}-${Date.now()}`, from: baseStation.id, to: topologyNodes[0].id });
-        }
-        
-        newNodes.push(baseStation, ...topologyNodes);
-
-    } else if (topology === 'star') {
-        const centerX = canvasWidth / 2;
-        const centerY = canvasHeight / 2;
-        const hubNode = createNode(0, centerX, centerY, NetworkComponentType.BASE_STATION);
-        newNodes.push(hubNode);
-    
-        if (count > 1) {
-            const peripheralCount = count - 1;
-            const radiusX = canvasWidth / 2 - padding;
-            const radiusY = canvasHeight / 2 - padding;
-            for (let i = 0; i < peripheralCount; i++) {
-                const angle = (i / peripheralCount) * 2 * Math.PI;
-                const pNode = createNode(i + 1, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle));
-                newNodes.push(pNode);
-                newConnections.push({ id: `${hubNode.id}-${pNode.id}-${Date.now()}`, from: pNode.id, to: hubNode.id });
-            }
-        }
-    }
-
-    // Ensure all nodes are part of a single connected component
-    if (newNodes.length > 1) {
-        const components = networkAnalysisService.findNetworkComponents(newNodes, newConnections);
-        if (components.length > 1) {
-            // Sort components by size, largest first
-            components.sort((a, b) => b.length - a.length);
-            const mainComponent = components.shift()!;
-
-            for (const isolatedComponent of components) {
-                let minDistance = Infinity;
-                let bestConnection: { from: string; to: string } | null = null;
-                
-                // Find the closest pair of nodes between the main component and the isolated one
-                for (const sourceNode of isolatedComponent) {
-                    for (const targetNode of mainComponent) {
-                        const distance = Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestConnection = { from: sourceNode.id, to: targetNode.id };
-                        }
-                    }
-                }
-
-                if (bestConnection) {
-                    newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
-                    // Conceptually merge the component for the next iteration if there were more than 2
-                    mainComponent.push(...isolatedComponent);
-                }
-            }
-        }
-    }
-    
     setNodes(newNodes);
     setConnections(newConnections);
+    setClusterHeadIds(newClusterHeadIds);
     setSelectedNodeIds([]);
     setIsConnectionMode(false);
     
     // Use timeout to ensure nodes are rendered before fitting
     setTimeout(() => handleFitToView(), 100);
 
-  }, [setNodes, setConnections, clearAnalysis, saveSnapshot, handleFitToView]);
+  }, [setNodes, setConnections, setClusterHeadIds, clearAnalysis, saveSnapshot, handleFitToView]);
 
   const updateNode = useCallback((updatedNode: Node) => {
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
@@ -855,55 +566,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const updateNodeIp = useCallback((nodeId: string, ipAddress: string) => {
     setNodes(prev => prev.map(n => (n.id === nodeId ? { ...n, ipAddress } : n)));
   }, [setNodes]);
-
-  const handleAutoConnect = useCallback((k: number) => {
-    if (nodes.length < 2 || k <= 0) return;
-    saveSnapshot();
-    const newConnections: Connection[] = [];
-    const connectedPairs = new Set<string>();
-    const maxNeighbors = Math.min(k, nodes.length - 1);
-
-    for (let i = 0; i < nodes.length; i++) {
-        const sourceNode = nodes[i];
-        
-        const distances = nodes
-            .map(targetNode => {
-                if (sourceNode.id === targetNode.id) return null;
-                const dist = Math.sqrt(Math.pow(sourceNode.x - targetNode.x, 2) + Math.pow(sourceNode.y - targetNode.y, 2));
-                return { id: targetNode.id, dist };
-            })
-            .filter((item): item is { id: string; dist: number } => item !== null)
-            .sort((a, b) => a.dist - b.dist);
-
-        for (let j = 0; j < maxNeighbors; j++) {
-            const targetNodeId = distances[j].id;
-
-            const pair = [sourceNode.id, targetNodeId].sort();
-            const pairKey = `${pair[0]}-${pair[1]}`;
-
-            if (!connectedPairs.has(pairKey)) {
-                newConnections.push({
-                    id: `${pairKey}-${Date.now()}`,
-                    from: sourceNode.id,
-                    to: targetNodeId
-                });
-                connectedPairs.add(pairKey);
-            }
-        }
-    }
-    setConnections(newConnections);
-  }, [nodes, setConnections, saveSnapshot]);
-
-  const handleConnectSelected = useCallback(() => {
-    if (selectedNodeIds.length !== 2) return;
-    const [fromId, toId] = selectedNodeIds;
-    const exists = connections.some(c => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId));
-    if (!exists) {
-        saveSnapshot();
-        setConnections(prev => [...prev, { id: `${fromId}-${toId}-${Date.now()}`, from: fromId, to: toId }]);
-    }
-    setSelectedNodeIds([]);
-  }, [selectedNodeIds, connections, setConnections, saveSnapshot]);
 
   const handleRouterAutoConnect = useCallback((routerId: string) => {
         saveSnapshot();
@@ -940,10 +602,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
-    setIsGeneratingInsights(true);
-    setAnalysisResult(null);
+    setAnalysisContent(null);
+    setIdentifiedTopology(null);
     setSimulationParams(null);
-    setInsights(null);
     setAnimatedPackets([]);
     setIsConnectionMode(false);
     setIsPacketSimulationMode(false);
@@ -956,41 +617,37 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       setIsolatedMaliciousNodeIds(maliciousNodeIds); // Simulate AI isolating the nodes
 
       const topology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
+      setIdentifiedTopology(topology);
+      const networkData = networkAnalysisService.getNetworkStats(nodes, connections);
       
-      const descriptionPromise = geminiService.getTopologyDescription(topology);
-      const insightsPromise = (async () => {
-        const networkData = networkAnalysisService.getNetworkStats(nodes, connections);
-        const insights = await geminiService.getNetworkInsights({ ...networkData, topology });
-        if (maliciousNodeIds.length > 0) {
-            return `${insights}\n\n**Security Alert:**\n* ${maliciousNodeIds.length} malicious node(s) detected. The AI protocol will attempt to mitigate the threat by isolating them and re-routing traffic. Expect a significant performance drop for traditional protocols.`;
-        }
-        return insights;
-      })();
+      const analysisPromise = geminiService.getStructuredAnalysis({ ...networkData, topology });
 
       const params = networkAnalysisService.simulatePerformance(topology, nodes, connections, maliciousNodeIds);
       setSimulationParams(params);
       setHasAnalyzedOnce(true);
-
-      const description = await descriptionPromise;
-      setAnalysisResult({ topology, description });
       
-      const generatedInsights = await insightsPromise;
-      setInsights(generatedInsights);
+      const generatedAnalysis = await analysisPromise;
+      let finalAnalysis = generatedAnalysis;
+      if (maliciousNodeIds.length > 0) {
+            finalAnalysis += `\n\n**Security Alert:**\n* ${maliciousNodeIds.length} malicious node(s) were detected. The AI protocol will attempt to mitigate the threat by isolating them and re-routing traffic. Expect a significant performance drop for traditional protocols.`;
+      }
+      setAnalysisContent(finalAnalysis);
       
       const farthestNodes = pathfindingService.findFarthestNodes(nodes, maliciousNodeIds);
       if (farthestNodes) {
-        const path = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections, maliciousNodeIds);
-        const pathTrad = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections);
-        startAnalysisPacketAnimation(path, pathTrad);
+        const pathOptions = { excludeNodeIds: maliciousNodeIds, clusterHeadIds, topology };
+        const pathTradOptions = { clusterHeadIds, topology };
+        
+        const path = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections, pathOptions);
+        const pathTrad = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections, pathTradOptions);
+        startAnalysisPacketAnimation(path, pathTrad, topology);
       }
 
     } catch (error) {
       console.error("Analysis failed:", error);
-      setAnalysisResult({ topology: 'Error', description: 'Failed to analyze network. Please check console.' });
-      setInsights('**Error:** Could not generate network insights.');
+      setAnalysisContent("**Error:** Could not generate network analysis. The API may be unavailable or the key may be invalid.");
     } finally {
       setIsAnalyzing(false);
-      setIsGeneratingInsights(false);
       stopMobility();
     }
   };
@@ -999,7 +656,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     const canvasEl = canvasRef.current;
     const reportEl = reportDashboardRef.current;
   
-    if (!canvasEl || !reportEl || !analysisResult || !insights) {
+    if (!canvasEl || !reportEl || !analysisContent) {
       alert("Please run an analysis first to generate all report components.");
       return;
     }
@@ -1016,35 +673,23 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       const margin = 40;
       const contentWidth = pdfWidth - margin * 2;
   
-      const addImageToPdf = (canvas: HTMLCanvasElement, pdfInstance: typeof pdf) => {
+      // Helper to add an image and return new Y position
+      const addImageToPdf = (canvas: HTMLCanvasElement, pdfInstance: typeof pdf, yPos: number): number => {
         const imgData = canvas.toDataURL('image/png');
         const imgProps = pdfInstance.getImageProperties(imgData);
         const ratio = imgProps.height / imgProps.width;
         let imgHeight = contentWidth * ratio;
         
-        pdfInstance.addImage(imgData, 'PNG', margin, 80, contentWidth, imgHeight);
+        if (yPos + imgHeight > pdfHeight - margin) {
+            pdfInstance.addPage();
+            yPos = margin;
+        }
+
+        pdfInstance.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight);
+        return yPos + imgHeight;
       };
       
-      const renderFormattedText = (text: string, initialY: number, pdfInstance: typeof pdf) => {
-          let y = initialY;
-          const lines = text.replace(/\*\*/g, '').split('\n').filter(line => line.trim() !== '');
-  
-          lines.forEach(line => {
-              if (y > pdfHeight - margin * 2) {
-                  pdfInstance.addPage();
-                  y = margin;
-              }
-              const isHeader = ["Definition:", "Protocols:", "Mechanism:"].some(h => line.startsWith(h));
-              
-              pdfInstance.setFont('helvetica', isHeader ? 'bold' : 'normal');
-              const textLines = pdfInstance.splitTextToSize(line, contentWidth);
-              pdfInstance.text(textLines, margin, y);
-              y += (textLines.length * pdfInstance.getLineHeight()) / pdfInstance.internal.scaleFactor + 5;
-          });
-          return y;
-      };
-      
-      const renderInsights = (text: string, initialY: number, pdfInstance: typeof pdf) => {
+      const renderAnalysisContent = (text: string, initialY: number, pdfInstance: typeof pdf): number => {
           let y = initialY;
           const sections: { [key: string]: string[] } = {};
           let currentSection = '';
@@ -1066,7 +711,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   y = margin;
               }
               pdfInstance.setFont('helvetica', 'bold');
-              pdfInstance.setFontSize(12);
+              pdfInstance.setFontSize(14);
               const titleLines = pdfInstance.splitTextToSize(title, contentWidth);
               pdfInstance.text(titleLines, margin, y);
               y += (titleLines.length * pdfInstance.getLineHeight()) / pdfInstance.internal.scaleFactor + 5;
@@ -1078,7 +723,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                       pdfInstance.addPage();
                       y = margin;
                   }
-                  const itemText = `• ${item}`;
+                  const itemText = (title.toLowerCase().includes('advantages') || title.toLowerCase().includes('disadvantages') || title.toLowerCase().includes('recommendations')) ? `• ${item}` : item;
                   const itemLines = pdfInstance.splitTextToSize(itemText, contentWidth - 10); // Indent
                   pdfInstance.text(itemLines, margin + 10, y);
                   y += (itemLines.length * pdfInstance.getLineHeight()) / pdfInstance.internal.scaleFactor + 2;
@@ -1087,46 +732,126 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
           });
           return y;
       };
+
+      const renderTable = (pdfInstance: typeof pdf, startY: number, title: string, headers: string[], data: string[][]): number => {
+        let y = startY;
+        const rowHeight = 20;
+        const headerHeight = 25;
+        
+        if (y + headerHeight + rowHeight > pdfHeight - margin) {
+            pdfInstance.addPage();
+            y = margin;
+        }
+
+        pdfInstance.setFontSize(16);
+        pdfInstance.text(title, margin, y);
+        y += 30;
+
+        const columnWidths = headers.map(() => contentWidth / headers.length);
+
+        pdfInstance.setFont('helvetica', 'bold');
+        pdfInstance.setFontSize(10);
+        let x = margin;
+        headers.forEach((header, i) => {
+            pdfInstance.text(header, x + 2, y);
+            x += columnWidths[i];
+        });
+        y += 5;
+        pdfInstance.line(margin, y, pdfWidth - margin, y);
+        y += 15;
+        
+        pdfInstance.setFont('helvetica', 'normal');
+        pdfInstance.setFontSize(9);
+        
+        data.forEach(row => {
+            if (y + rowHeight > pdfHeight - margin) {
+                pdfInstance.addPage();
+                y = margin;
+                pdfInstance.setFont('helvetica', 'bold');
+                pdfInstance.setFontSize(10);
+                x = margin;
+                headers.forEach((header, i) => {
+                    pdfInstance.text(header, x + 2, y);
+                    x += columnWidths[i];
+                });
+                y += 5;
+                pdfInstance.line(margin, y, pdfWidth - margin, y);
+                y += 15;
+                pdfInstance.setFont('helvetica', 'normal');
+                pdfInstance.setFontSize(9);
+            }
+            x = margin;
+            row.forEach((cell, i) => {
+                pdfInstance.text(cell, x + 2, y);
+                x += columnWidths[i];
+            });
+            y += rowHeight;
+        });
+        return y;
+      };
   
-      // --- PDF Header ---
+      // --- PAGE 1: Title & Canvas ---
       pdf.setFontSize(20);
       pdf.text('Full Network Simulation Report', pdfWidth / 2, margin, { align: 'center' });
-  
-      // --- Section 1: Network Canvas ---
       pdf.setFontSize(16);
-      pdf.text('1. Network Topology Visualization', margin, margin + 20);
+      pdf.text('1. Network Topology Visualization', margin, margin + 30);
       const canvasImage = await html2canvas(canvasEl, { backgroundColor: '#1f2937', useCORS: true, logging: false, scale: 2 });
-      addImageToPdf(canvasImage, pdf);
+      addImageToPdf(canvasImage, pdf, margin + 50);
   
-      // --- Section 2: Topology Analysis & AI Insights (Native Text) ---
+      // --- PAGE 2: AI Analysis ---
       pdf.addPage();
+      let yPos = margin;
       pdf.setFontSize(16);
-      pdf.text('2. Topology Analysis & AI Insights', margin, margin);
-      let currentY = margin + 30;
-      
-      // Analysis Part
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`Identified Topology: ${analysisResult.topology}`, margin, currentY);
-      currentY += 20;
-      pdf.setFontSize(10);
-      currentY = renderFormattedText(analysisResult.description, currentY, pdf);
-      
-      currentY += 20; // Spacing
-      
-      // Insights Part
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.text("AI-Powered Insights", margin, currentY);
-      currentY += 25;
-      renderInsights(insights, currentY, pdf);
+      pdf.text('2. AI-Powered Analysis', margin, yPos);
+      yPos = renderAnalysisContent(analysisContent, yPos + 30, pdf);
   
-      // --- Section 3: Detailed Performance Report ---
+      // --- PAGE 3: Performance Charts ---
       pdf.addPage();
+      yPos = margin;
       pdf.setFontSize(16);
-      pdf.text('3. Detailed Performance Report', margin, margin);
-      const reportImage = await html2canvas(reportEl, { backgroundColor: '#111827', useCORS: true, logging: false, scale: 2 });
-      addImageToPdf(reportImage, pdf);
+      pdf.text('3. Key Performance Metrics', margin, yPos);
+      const performanceGridEl = reportEl.querySelector('#performance-grid');
+      if (performanceGridEl) {
+        const performanceCanvas = await html2canvas(performanceGridEl as HTMLElement, { backgroundColor: '#111827', useCORS: true, scale: 2 });
+        yPos = addImageToPdf(performanceCanvas, pdf, yPos + 20);
+      }
+      
+      const liveChartsEl = reportEl.querySelector('#live-charts');
+      if (liveChartsEl) {
+          yPos += 20;
+          if (yPos > pdfHeight - 250) { // Check if there's enough space for the next chart
+              pdf.addPage();
+              yPos = margin;
+          }
+          pdf.setFontSize(16);
+          pdf.text('4. Live Performance Monitoring', margin, yPos);
+          const liveChartsCanvas = await html2canvas(liveChartsEl as HTMLElement, { backgroundColor: '#111827', useCORS: true, scale: 2 });
+          yPos = addImageToPdf(liveChartsCanvas, pdf, yPos + 20);
+      }
+
+      // --- PAGE 4+: Data Tables ---
+      pdf.addPage();
+      yPos = margin;
+      const nodeHealthHeaders = ['Node ID', 'Type', 'Efficiency (%)', 'Spent (J)'];
+      const nodeHealthData = nodes.map((node, index) => ([
+        `Node ${index + 1}`,
+        node.type.replace('_', ' ').toLowerCase(),
+        `${node.energyEfficiency}`,
+        `${node.energySpent}`
+      ]));
+      yPos = renderTable(pdf, yPos, '5. Node Health Status', nodeHealthHeaders, nodeHealthData);
+
+      const ipConfigHeaders = ['Node ID', 'IP Address'];
+      const ipConfigData = nodes.map((node, index) => ([
+        `Node ${index + 1}`,
+        node.ipAddress
+      ]));
+      yPos += 30;
+      if (yPos > pdfHeight - 100) {
+        pdf.addPage();
+        yPos = margin;
+      }
+      renderTable(pdf, yPos, '6. IP Address Configuration', ipConfigHeaders, ipConfigData);
   
       pdf.save("full-network-report.pdf");
     } catch (error) {
@@ -1134,6 +859,99 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       alert("An error occurred while generating the PDF report. Please check the console for details.");
     } finally {
       setIsDownloadingReport(false);
+    }
+  };
+
+  const handleDownloadParameterGraph = async (parameter: keyof SimulationParameters) => {
+    setIsDownloadingReport(true);
+    try {
+        const nodeCounts = [10, 30, 50, 80, 120, 150];
+        const graphData = [];
+        
+        const currentTopology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
+
+        // FIX: Map the identified topology string to a valid NetworkTopology for generation.
+        const toGenerationTopology = (topology: string): NetworkTopology => {
+            const lower = topology.toLowerCase();
+            if (lower.includes('cluster-mesh')) return 'cluster-mesh';
+            if (lower.includes('cluster')) return 'cluster';
+            if (lower.includes('mesh')) return 'mesh';
+            if (lower.includes('star')) return 'star';
+            if (lower.includes('ring')) return 'ring';
+            if (lower.includes('bus')) return 'bus';
+            if (lower.includes('grid')) return 'grid';
+            return 'random'; // Fallback for hybrid, linear, etc.
+        };
+        const generationTopology = toGenerationTopology(currentTopology);
+
+        for (const count of nodeCounts) {
+            const { nodes: simNodes, connections: simConnections } =
+                networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
+            
+            const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
+            
+            graphData.push({
+                nodes: count,
+                'AI-Based': results['AI-Based'][parameter],
+                'Traditional': results['Traditional'][parameter],
+            });
+        }
+        
+        // Render chart to a hidden div
+        const chartContainer = document.createElement('div');
+        chartContainer.style.position = 'absolute';
+        chartContainer.style.left = '-9999px';
+        chartContainer.style.width = '800px';
+        chartContainer.style.height = '500px';
+        chartContainer.style.backgroundColor = '#111827';
+        chartContainer.style.padding = '20px';
+        document.body.appendChild(chartContainer);
+
+        const ChartComponent = (
+            <div style={{width: '100%', height: '100%'}}>
+              <h2 style={{color: '#9ca3af', textAlign: 'center'}}>{parameter} vs. Number of Nodes ({currentTopology})</h2>
+              <ResponsiveContainer width="100%" height="90%">
+                <LineChart data={graphData} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="nodes" stroke="#9ca3af" label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -5, fill: '#9ca3af' }} />
+                  <YAxis stroke="#9ca3af" label={{ value: parameter, angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="AI-Based" stroke="#22d3ee" strokeWidth={2} />
+                  <Line type="monotone" dataKey="Traditional" stroke="#f97316" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+        );
+
+        const { createRoot } = await import('react-dom/client');
+        const root = createRoot(chartContainer);
+        root.render(ChartComponent);
+
+        // Allow time for chart to render
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const { default: html2canvas } = await import('html2canvas');
+        const { default: jsPDF } = await import('jspdf');
+
+        const canvas = await html2canvas(chartContainer, { backgroundColor: '#111827', useCORS: true, scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        
+        const pdf = new jsPDF('l', 'pt', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        pdf.addImage(imgData, 'PNG', 40, 40, pdfWidth - 80, pdfHeight - 80);
+        pdf.save(`${String(parameter).replace(/ /g, '_')}_vs_Nodes.pdf`);
+
+        root.unmount();
+        document.body.removeChild(chartContainer);
+
+    } catch (error) {
+        console.error("Failed to generate parameter graph PDF:", error);
+        alert("An error occurred while generating the graph PDF.");
+    } finally {
+        setIsDownloadingReport(false);
     }
   };
 
@@ -1150,135 +968,132 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     let newConnections: Connection[] = [];
 
     const topology = networkAnalysisService.identifyTopology(newNodes, connections, clusterHeadIds);
-    const isClusterTopology = topology.toLowerCase().includes('cluster');
 
-    if (isClusterTopology) {
-        // Advanced reconstruction for cluster topologies
-        const remainingClusterHeads = newNodes.filter(n => clusterHeadIds.includes(n.id) && !weakNodeIds.includes(n.id));
-        const baseStation = newNodes.find(n => n.type === NetworkComponentType.BASE_STATION);
-        const endNodes = newNodes.filter(n => n.type === NetworkComponentType.NODE && !remainingClusterHeads.some(h => h.id === n.id));
-
-        if (remainingClusterHeads.length > 0 && baseStation) {
-            // 1. Reconnect end nodes to their nearest cluster head
-            endNodes.forEach(endNode => {
-                let closestHead = remainingClusterHeads[0];
-                let minDistance = Infinity;
-                remainingClusterHeads.forEach(head => {
-                    const distance = Math.hypot(endNode.x - head.x, endNode.y - head.y);
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestHead = head;
-                    }
-                });
-                newConnections.push({ id: `re-${endNode.id}-${closestHead.id}`, from: endNode.id, to: closestHead.id });
-            });
-
-            // 2. Connect cluster heads to each other (e.g., nearest 2)
-            remainingClusterHeads.forEach(head => {
-                const otherHeads = remainingClusterHeads.filter(h => h.id !== head.id);
-                if (otherHeads.length === 0) return;
-                
-                otherHeads.sort((a, b) => Math.hypot(head.x - a.x, head.y - a.y) - Math.hypot(head.x - b.x, head.y - b.y));
-
-                const neighborsToConnect = Math.min(2, otherHeads.length);
-                for(let i=0; i < neighborsToConnect; i++){
-                    const neighbor = otherHeads[i];
-                    const exists = newConnections.some(c => (c.from === head.id && c.to === neighbor.id) || (c.from === neighbor.id && c.to === head.id));
-                    if (!exists) {
-                       newConnections.push({ id: `re-${head.id}-${neighbor.id}`, from: head.id, to: neighbor.id });
-                    }
+    // --- ENHANCED RECONSTRUCTION LOGIC ---
+    if (topology.toLowerCase().includes('star')) {
+        let hubNode = newNodes.find(n => n.type === NetworkComponentType.BASE_STATION || n.type === NetworkComponentType.SWITCH);
+        if (!hubNode) { // If original hub was removed, find new most central node
+            let minAvgDist = Infinity;
+            newNodes.forEach(n1 => {
+                const avgDist = newNodes.reduce((sum, n2) => sum + Math.hypot(n1.x - n2.x, n1.y - n2.y), 0) / newNodes.length;
+                if (avgDist < minAvgDist) {
+                    minAvgDist = avgDist;
+                    hubNode = n1;
                 }
             });
-
-            // 3. Connect the closest cluster head to the base station
-            let closestHeadToBase = remainingClusterHeads[0];
-            let minDistanceToBase = Infinity;
-             remainingClusterHeads.forEach(head => {
-                const distance = Math.hypot(head.x - baseStation.x, head.y - baseStation.y);
-                if (distance < minDistanceToBase) {
-                    minDistanceToBase = distance;
-                    closestHeadToBase = head;
-                }
-            });
-            newConnections.push({ id: `re-ch-bs-${closestHeadToBase.id}`, from: closestHeadToBase.id, to: baseStation.id });
-
-        } else {
-             // Fallback if no heads or base station left, just connect everything
-             const components = networkAnalysisService.findNetworkComponents(newNodes, []);
-             if (components.length > 1) { /* ... use generic logic ... */ }
+        }
+        if (hubNode) {
+            newConnections = newNodes
+                .filter(n => n.id !== hubNode!.id)
+                .map(n => ({ id: `re-${n.id}-${hubNode!.id}`, from: n.id, to: hubNode!.id }));
         }
 
-    } else {
-        // Generic Graph-based Reconnection for non-cluster topologies
-        newConnections = connections.filter(c => !weakNodeIds.includes(c.from) && !weakNodeIds.includes(c.to));
+    } else if (topology.toLowerCase().includes('ring')) {
         if (newNodes.length >= 2) {
-            const components = networkAnalysisService.findNetworkComponents(newNodes, newConnections);
-            if (components.length > 1) {
-                components.sort((a, b) => b.length - a.length);
-                const mainComponent = components.shift()!;
-                for (const isolatedComponent of components) {
-                    let minDistance = Infinity;
-                    let bestConnection: { from: string; to: string } | null = null;
-                    for (const sourceNode of isolatedComponent) {
-                        for (const targetNode of mainComponent) {
-                            const distance = Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y);
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                bestConnection = { from: sourceNode.id, to: targetNode.id };
-                            }
+            const getCentroid = (pts: Node[]) => {
+                const center = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+                center.x /= pts.length;
+                center.y /= pts.length;
+                return center;
+            };
+            const center = getCentroid(newNodes);
+            const sortedNodes = [...newNodes].sort((a, b) => {
+                const angleA = Math.atan2(a.y - center.y, a.x - center.x);
+                const angleB = Math.atan2(b.y - center.y, b.x - center.x);
+                return angleA - angleB;
+            });
+            for (let i = 0; i < sortedNodes.length; i++) {
+                const fromNode = sortedNodes[i];
+                const toNode = sortedNodes[(i + 1) % sortedNodes.length];
+                newConnections.push({ id: `re-${fromNode.id}-${toNode.id}`, from: fromNode.id, to: toNode.id });
+            }
+        }
+    } else if (topology.toLowerCase().includes('grid') || topology.toLowerCase().includes('mesh')) {
+        // For Grid and Mesh, a k-nearest neighbor approach is robust.
+        const K_NEAREST = newNodes.length > 5 ? 3 : 2;
+        newNodes.forEach(sourceNode => {
+            const distances = newNodes
+                .filter(n => n.id !== sourceNode.id)
+                .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
+                .sort((a, b) => a.dist - b.dist);
+            
+            for (let k = 0; k < Math.min(K_NEAREST, distances.length); k++) {
+                const targetNodeId = distances[k].id;
+                const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
+                if (!exists) {
+                    newConnections.push({ id: `re-${sourceNode.id}-${targetNodeId}`, from: sourceNode.id, to: targetNodeId });
+                }
+            }
+        });
+
+    } else {
+        // --- Generic/Cluster Fallback Reconnection Logic ---
+        newConnections = connections.filter(c => !weakNodeIds.includes(c.from) && !weakNodeIds.includes(c.to));
+    }
+    
+    // --- Final Step: Ensure full connectivity for all topologies ---
+    if (newNodes.length >= 2) {
+        const components = networkAnalysisService.findNetworkComponents(newNodes, newConnections);
+        if (components.length > 1) {
+            components.sort((a, b) => b.length - a.length);
+            const mainComponent = components.shift()!;
+            for (const isolatedComponent of components) {
+                let minDistance = Infinity;
+                let bestConnection: { from: string; to: string } | null = null;
+                for (const sourceNode of isolatedComponent) {
+                    for (const targetNode of mainComponent) {
+                        const distance = Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestConnection = { from: sourceNode.id, to: targetNode.id };
                         }
                     }
-                    if (bestConnection) {
-                        newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
-                        mainComponent.push(...isolatedComponent);
-                    }
+                }
+                if (bestConnection) {
+                    newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
+                    mainComponent.push(...isolatedComponent);
                 }
             }
         }
     }
+
 
     setNodes(newNodes);
     setConnections(newConnections);
     const remainingClusterHeadIds = clusterHeadIds.filter(id => !weakNodeIds.includes(id));
     setClusterHeadIds(remainingClusterHeadIds);
     setSelectedNodeIds([]);
-    setInsights(null);
+    setAnalysisContent(null);
+    setIdentifiedTopology(null);
     setAnimatedPackets([]);
     
     alert(`Removed ${weakNodeIds.length} weaker node(s). The network has been reconnected and the report will now be updated.`);
     
     if (newNodes.length >= 2) {
-      setIsGeneratingInsights(true);
+      setIsAnalyzing(true);
       try {
         const newTopology = networkAnalysisService.identifyTopology(newNodes, newConnections, remainingClusterHeadIds);
-        const descriptionPromise = geminiService.getTopologyDescription(newTopology);
-        const insightsPromise = (async () => {
-            const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);
-            return await geminiService.getNetworkInsights({ ...networkData, topology: newTopology });
-        })();
+        setIdentifiedTopology(newTopology);
+        const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);
+        const analysisPromise = geminiService.getStructuredAnalysis({ ...networkData, topology: newTopology });
         
-        setAnalysisResult({ topology: newTopology, description: "Loading..." });
         const params = networkAnalysisService.simulatePerformance(newTopology, newNodes, newConnections);
         setSimulationParams(params);
 
-        const description = await descriptionPromise;
-        setAnalysisResult({ topology: newTopology, description });
-
-        const newInsights = await insightsPromise;
-        setInsights(newInsights);
+        const newAnalysis = await analysisPromise;
+        setAnalysisContent(newAnalysis);
 
       } catch (error) {
         console.error("Re-analysis failed after reconstruction:", error);
-        setAnalysisResult({ topology: 'Error', description: 'Failed to re-analyze network.' });
-        setInsights('**Error:** Could not regenerate insights after reconstruction.');
+        setAnalysisContent('**Error:** Could not regenerate analysis after reconstruction.');
       } finally {
-        setIsGeneratingInsights(false);
+        setIsAnalyzing(false);
         startMobility(); // Keep the network "live" after reconstruction
       }
     } else {
         clearAnalysis();
     }
-  }, [nodes, connections, setNodes, setConnections, clearAnalysis, startMobility, saveSnapshot, clusterHeadIds]);
+  }, [nodes, connections, setNodes, setConnections, clearAnalysis, startMobility, saveSnapshot, clusterHeadIds, setClusterHeadIds]);
   
   const handleSaveNetwork = useCallback(() => {
     if (nodes.length === 0) {
@@ -1396,14 +1211,12 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   onToggleConnectionMode={toggleConnectionMode}
                   isPacketSimulationMode={isPacketSimulationMode}
                   onTogglePacketSimulationMode={togglePacketSimulationMode}
-                  onAutoConnect={handleAutoConnect}
-                  onConnectSelected={handleConnectSelected}
-                  numSelectedNodes={selectedNodeIds.length}
                   onDownloadReport={handleDownloadFullReport}
-                  analysisPerformed={!!analysisResult}
+                  analysisPerformed={!!analysisContent}
                   isDownloadingReport={isDownloadingReport}
                   onSaveNetwork={handleSaveNetwork}
                   onLoadNetwork={handleLoadNetwork}
+                  onDownloadParameterGraph={handleDownloadParameterGraph}
               />
               {isPacketSimulationMode && (
                   <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 animate-fadeIn">
@@ -1435,22 +1248,13 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
               )}
 
               <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20">
-                  <div ref={analysisDownloadRef}>
-                      {analysisResult && (
-                          <div className="p-4">
-                              <div className="flex justify-between items-center mb-2">
-                                <h3 className="text-lg font-bold text-cyan-300">Topology Analysis</h3>
-                              </div>
-                              <p className="mb-2 text-cyan-100">Identified Topology: <strong className="text-white">{analysisResult.topology}</strong></p>
-                              <FormattedDescription text={analysisResult.description} />
-                          </div>
-                      )}
-                      {(isAnalyzing || insights) && (
-                        <div className={`${analysisResult ? 'border-t border-cyan-500/20' : ''}`}>
-                          <AIInsightsPanel isLoading={isGeneratingInsights} insights={insights} />
-                        </div>
-                      )}
-                  </div>
+                  {(isAnalyzing || analysisContent) && (
+                    <AIInsightsPanel
+                      isLoading={isAnalyzing}
+                      content={analysisContent}
+                      topologyName={identifiedTopology}
+                    />
+                  )}
               </div>
 
           </div>

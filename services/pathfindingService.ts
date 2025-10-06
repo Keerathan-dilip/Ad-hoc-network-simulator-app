@@ -1,3 +1,4 @@
+
 import { Node, Connection, NetworkComponentType } from '../types';
 
 class PathfindingService {
@@ -22,26 +23,18 @@ class PathfindingService {
     return farthestPair;
   }
 
-  public findShortestPath(startNodeId: string, endNodeId: string, nodes: Node[], connections: Connection[], excludeNodeIds: string[] = []): string[] | null {
-    if (!startNodeId || !endNodeId || nodes.length === 0 || excludeNodeIds.includes(startNodeId) || excludeNodeIds.includes(endNodeId)) return null;
+  private bfs(startNodeId: string, endNodeId: string, availableNodes: Node[], connections: Connection[]): string[] | null {
+    if (startNodeId === endNodeId) return [startNodeId];
 
+    const nodeIds = new Set(availableNodes.map(n => n.id));
     const adjacency: { [key: string]: string[] } = {};
-    nodes.forEach(n => {
-        if (!excludeNodeIds.includes(n.id)) {
-            adjacency[n.id] = [];
+    availableNodes.forEach(n => adjacency[n.id] = []);
+    connections.forEach(c => {
+        if (nodeIds.has(c.from) && nodeIds.has(c.to)) {
+            adjacency[c.from].push(c.to);
+            adjacency[c.to].push(c.from);
         }
     });
-
-    const disabledSwitches = new Set(nodes.filter(n => n.type === NetworkComponentType.SWITCH && n.isEnabled === false).map(n => n.id));
-
-    connections.forEach(c => {
-      if (disabledSwitches.has(c.from) || disabledSwitches.has(c.to) || excludeNodeIds.includes(c.from) || excludeNodeIds.includes(c.to)) {
-        return; // Skip connections involving disabled or excluded nodes
-      }
-      adjacency[c.from]?.push(c.to);
-      adjacency[c.to]?.push(c.from);
-    });
-
 
     const queue: string[][] = [[startNodeId]];
     const visited = new Set<string>([startNodeId]);
@@ -50,21 +43,106 @@ class PathfindingService {
       const path = queue.shift()!;
       const nodeId = path[path.length - 1];
 
-      if (nodeId === endNodeId) {
-        return path;
-      }
+      if (nodeId === endNodeId) return path;
 
-      const neighbors = adjacency[nodeId] || [];
-      for (const neighbor of neighbors) {
+      for (const neighbor of adjacency[nodeId] || []) {
         if (!visited.has(neighbor)) {
           visited.add(neighbor);
-          const newPath = [...path, neighbor];
-          queue.push(newPath);
+          queue.push([...path, neighbor]);
         }
       }
     }
+    return null;
+  }
 
-    return null; // No path found
+  private findClusterHeadForNode(nodeId: string, nodes: Node[], connections: Connection[], clusterHeadIds: string[]): string | null {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return null;
+
+      if (clusterHeadIds.includes(nodeId) || node.type === NetworkComponentType.BASE_STATION) {
+          return nodeId;
+      }
+      
+      const neighbors = connections
+          .filter(c => c.from === nodeId || c.to === nodeId)
+          .map(c => c.from === nodeId ? c.to : c.from);
+
+      for (const neighborId of neighbors) {
+          if (clusterHeadIds.includes(neighborId)) {
+              return neighborId;
+          }
+      }
+      
+      // Fallback: if not directly connected, find closest one via BFS on all non-head nodes
+      const nonHeadNodes = nodes.filter(n => !clusterHeadIds.includes(n.id) || n.id === nodeId);
+      let closestHead: string | null = null;
+      let shortestPathLength = Infinity;
+
+      for(const headId of clusterHeadIds) {
+          const path = this.bfs(nodeId, headId, nonHeadNodes, connections);
+          if (path && path.length < shortestPathLength) {
+              shortestPathLength = path.length;
+              closestHead = headId;
+          }
+      }
+      return closestHead;
+  }
+
+
+  public findShortestPath(
+    startNodeId: string,
+    endNodeId: string,
+    nodes: Node[],
+    connections: Connection[],
+    options: {
+      excludeNodeIds?: string[];
+      clusterHeadIds?: string[];
+      topology?: string;
+    } = {}
+  ): string[] | null {
+    const { excludeNodeIds = [], clusterHeadIds = [], topology = '' } = options;
+    if (!startNodeId || !endNodeId || nodes.length === 0 || excludeNodeIds.includes(startNodeId) || excludeNodeIds.includes(endNodeId)) return null;
+
+    const disabledSwitches = new Set(nodes.filter(n => n.type === NetworkComponentType.SWITCH && n.isEnabled === false).map(n => n.id));
+    const validNodes = nodes.filter(n => !excludeNodeIds.includes(n.id));
+    const validConnections = connections.filter(c => !disabledSwitches.has(c.from) && !disabledSwitches.has(c.to) && !excludeNodeIds.includes(c.from) && !excludeNodeIds.includes(c.to));
+    
+    // --- Hierarchical Cluster Routing ---
+    if (topology.toLowerCase().includes('cluster') && clusterHeadIds.length > 0) {
+        const startHead = this.findClusterHeadForNode(startNodeId, validNodes, validConnections, clusterHeadIds);
+        const endHead = this.findClusterHeadForNode(endNodeId, validNodes, validConnections, clusterHeadIds);
+
+        if (!startHead || !endHead) return null; // Cannot determine routing path
+
+        // Case 1: Path within the same cluster (or from a node to its head)
+        if (startHead === endHead) {
+            const clusterNodes = validNodes.filter(n => this.findClusterHeadForNode(n.id, validNodes, validConnections, clusterHeadIds) === startHead);
+            const pathStartToHead = this.bfs(startNodeId, startHead, clusterNodes, validConnections);
+            const pathHeadToEnd = this.bfs(startHead, endNodeId, clusterNodes, validConnections);
+            
+            if (pathStartToHead && pathHeadToEnd) {
+                return [...pathStartToHead, ...pathHeadToEnd.slice(1)];
+            }
+            // Fallback to direct path if head-path fails
+            return this.bfs(startNodeId, endNodeId, clusterNodes, validConnections);
+        }
+
+        // Case 2: Path between different clusters
+        const path1 = this.bfs(startNodeId, startHead, validNodes, validConnections);
+        
+        const headAndBaseStationNodes = validNodes.filter(n => clusterHeadIds.includes(n.id) || n.type === NetworkComponentType.BASE_STATION);
+        const path2 = this.bfs(startHead, endHead, headAndBaseStationNodes, validConnections);
+        
+        const path3 = this.bfs(endHead, endNodeId, validNodes, validConnections);
+
+        if (path1 && path2 && path3) {
+            // Combine paths and remove duplicate nodes at junctions
+            return [...path1, ...path2.slice(1), ...path3.slice(1)];
+        }
+    }
+
+    // --- Standard BFS Routing (Fallback / Non-cluster) ---
+    return this.bfs(startNodeId, endNodeId, validNodes, validConnections);
   }
 }
 

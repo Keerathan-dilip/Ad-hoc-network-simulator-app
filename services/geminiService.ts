@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 interface NetworkInsightsData {
@@ -22,22 +23,18 @@ class GeminiService {
     }
   }
 
+  // FIX: Add getTopologyDescription method to satisfy call from Chatbot.tsx
   public async getTopologyDescription(topology: string): Promise<string> {
     if (!this.ai) {
-      console.warn("API_KEY not found. Using mock data for Gemini service.");
-      return this.getMockDescription(topology);
+      console.warn("API_KEY not found. Using mock data for topology description.");
+      return this.getMockTopologyDescription(topology);
     }
-    
+
     const prompt = `
-      As a network engineering expert, provide a detailed analysis of the following network topology for a simulation tool: "${topology}".
-
-      Your explanation must be structured with the following sections. Use the exact section headers provided below, wrapping them in double asterisks (e.g., **Definition:**). Also, wrap each protocol name you mention in double asterisks (e.g., **AODV**).
-
-      **Definition:** A detailed, one-paragraph explanation of what this topology is.
-      **Use Cases:** A one-paragraph description of the typical environments or scenarios where this topology is deployed.
-      **Advantages:** A list of 2-3 key strengths of this topology. Start each point on a new line with an asterisk (*).
-      **Disadvantages:** A list of 2-3 key weaknesses or challenges. Start each point on a new line with an asterisk (*).
-      **Applicable Protocols:** State the primary ad hoc routing protocol that is most suitable. Then, briefly mention one or two common alternative protocols.
+      Provide a concise, one-paragraph explanation of a "${topology}" network topology for a user in a simulation tool.
+      Explain its main characteristics, key advantages, and common disadvantages or use cases.
+      Structure the explanation to be easily understandable for someone learning about networks.
+      Highlight key terms by wrapping them in double asterisks, for example, **decentralized** or **single point of failure**.
     `;
 
     try {
@@ -47,22 +44,23 @@ class GeminiService {
       });
       return response.text;
     } catch (error) {
-      console.error("Error fetching from Gemini API:", error);
-      return "Could not retrieve description. The API may be unavailable or the key may be invalid.";
+      console.error(`Error fetching topology description from Gemini API for ${topology}:`, error);
+      return `**Error:** Could not get information about the ${topology} topology.`;
     }
   }
-
-  public async getNetworkInsights(data: NetworkInsightsData): Promise<string> {
+  
+  public async getStructuredAnalysis(data: NetworkInsightsData): Promise<string> {
     if (!this.ai) {
       console.warn("API_KEY not found. Using mock data for Gemini insights.");
-      return this.getMockInsights(data);
+      return this.getMockStructuredAnalysis(data);
     }
 
     const prompt = `
-      You are an expert network analyst providing insights for a network simulation tool.
-      The user has designed a network in the visual builder. Based on the following live data, provide a concise analysis that is **completely related** to their specific design.
+      You are an expert network analyst providing a structured educational report for an ad hoc network simulation tool.
+      Your response MUST follow the specified order and use the exact section headers provided.
+      The first few sections should be general educational content about the identified topology, and the final sections should be AI insights tailored to the user's specific design.
 
-      Network Data:
+      Network Data for Specific Insights:
       - Total Node Count: ${data.nodeCount}
       - Infrastructure: ${data.routerCount} Routers, ${data.switchCount} Switches, ${data.baseStationCount} Base Stations
       - Connection Count: ${data.connectionCount}
@@ -72,14 +70,25 @@ class GeminiService {
       - Average Mobile Node Energy Efficiency: ${data.avgEnergyEfficiency.toFixed(1)}%
       - Weak Nodes (efficiency < 85%): ${data.weakNodes}
 
-      Please structure your response with the following sections, using markdown bold for headers (e.g., **Overall Health**). Do not use any other markdown.
+      Please generate the report with the following sections in this exact order. Use double asterisks for headers (e.g., **Definition:**) and asterisks for list items (*).
 
-      **Overall Health:** A one-sentence summary of the network's condition based on the data.
-      **Strengths:** 2-3 bullet points on what is good about this specific configuration, referencing the data provided (e.g., "Good use of routers for segmentation"). Use '*' for bullet points.
-      **Risks & Weaknesses:** 2-3 bullet points on potential issues, referencing the data (e.g., "${data.isolatedNodes} isolated nodes cannot communicate"). Use '*' for bullet points.
-      **Recommendations:** 2-3 bullet points with actionable advice for improvement (e.g., "Use the 'Auto-Connect' feature to integrate isolated nodes."). Use '*' for bullet points.
+      **Definition:**
+      Provide a concise, one-paragraph definition of a "${data.topology}".
 
-      Keep the language clear, direct, and helpful. Your analysis must be grounded in the provided numbers.
+      **Recommended Protocol:**
+      State the primary ad hoc routing protocol most suitable for a general "${data.topology}" network. Then, in the same paragraph, briefly explain its mechanism and why it's a good fit. Wrap the protocol name in double asterisks (e.g., **AODV**).
+
+      **General Advantages:**
+      List 2-3 key general advantages of the "${data.topology}". Start each point on a new line with an asterisk (*).
+
+      **General Disadvantages:**
+      List 2-3 key general disadvantages of the "${data.topology}". Start each point on a new line with an asterisk (*).
+
+      **AI Insights on Your Design:**
+      Based on the specific Network Data provided above, provide a one-paragraph analysis of the user's current network. Comment on its specific structure, density, component usage, and health.
+
+      **Recommendations:**
+      Based on the specific Network Data, provide a list of 2-3 actionable recommendations for improving this particular design. Start each point on a new line with an asterisk (*).
     `;
 
     try {
@@ -89,85 +98,51 @@ class GeminiService {
       });
       return response.text;
     } catch (error) {
-      console.error("Error fetching insights from Gemini API:", error);
-      return "**Error:** Could not generate network insights. The API may be unavailable.";
+      console.error("Error fetching analysis from Gemini API:", error);
+      return "**Error:** Could not generate network analysis. The API may be unavailable or the key may be invalid.";
     }
   }
 
-  private getMockInsights(data: NetworkInsightsData): string {
+  private getMockTopologyDescription(topology: string): string {
+    const descriptions: { [key: string]: string } = {
+        'cluster': `A **cluster** topology organizes nodes into groups. Each group has a **cluster head** that manages communication within its cluster and with other clusters. This hierarchical approach is excellent for **scalability** in large networks but can introduce latency if data has to travel between many clusters.`,
+        'mesh': `A **mesh** network is a **decentralized** system where nodes connect to many other nodes, creating multiple redundant paths. This makes it highly **resilient** to node failures. The main drawback is the potential for high routing overhead as the network grows.`,
+        'cluster-mesh': `This **hybrid** topology combines the best of both worlds. Nodes are grouped into **clusters** for scalability, but within each cluster, they form a **mesh** network for high resilience. It provides a good balance between robustness and efficiency.`,
+        'star': `In a **star** topology, all nodes are connected to a single, central hub (like a switch or base station). It's simple to manage and add new nodes. However, if the central hub fails, the entire network goes down, making it a **single point of failure**.`,
+        'ring': `A **ring** topology connects each node to exactly two other nodes, forming a single continuous pathway for signals. It's orderly and performs well under heavy load, but the failure of a single node or cable can break the entire loop.`,
+        'bus': `A **bus** topology uses a single backbone cable to which all nodes are connected. It's simple and inexpensive to set up. However, problems with the main cable can disable the entire network, and performance degrades as more nodes are added due to data collisions.`,
+        'grid': `A **grid** topology arranges nodes in a two-dimensional grid. It's a highly structured and redundant form of a mesh network, often used in high-performance computing. It offers good fault tolerance but can be inefficient for widespread ad hoc networks.`,
+        'random': `A **random** topology places nodes arbitrarily, simulating unpredictable real-world environments like a disaster area or a battlefield. It's useful for testing the **adaptability** of routing protocols under chaotic conditions.`,
+    };
+    return descriptions[topology as keyof typeof descriptions] || `A description for the ${topology} topology, highlighting its key features.`;
+  }
+
+  private getMockStructuredAnalysis(data: NetworkInsightsData): string {
     return `
-      **Overall Health:** A moderately robust network with good potential, but requires attention to connectivity and node health.
-      **Strengths:**
-      * The cluster-based structure with ${data.routerCount} routers is efficient for scalability.
-      * A majority of nodes have high energy efficiency.
-      **Risks & Weaknesses:**
-      * ${data.isolatedNodes > 0 ? `There are ${data.isolatedNodes} isolated nodes that cannot communicate.` : 'Connectivity seems generally good.'}
-      * The presence of ${data.weakNodes} weak nodes will negatively impact the network's lifetime.
-      **Recommendations:**
-      * Use the 'Auto-Connect' feature to ensure all nodes are part of the network.
-      * Consider removing weak nodes using the 'Reconstruct' option in the report dashboard.
-    `;
-  }
+**Definition:**
+A ${data.topology} is a network layout where nodes are organized in a specific physical or logical manner. This structure dictates how devices are connected and how they communicate with one another, influencing the network's overall performance, reliability, and scalability.
 
-  private getMockDescription(topology: string): string {
-    switch(topology.toLowerCase()) {
-        case 'star topology':
-            return `**Definition:** A star topology is a network setup where every node connects to a central hub, like a switch or router. All traffic passes through this central point.
-**Use Cases:** Commonly found in home and small office networks (e.g., Wi-Fi), where devices connect to a central wireless router.
-**Advantages:**
-* Easy to install and manage.
-* Failure of a single node does not affect the rest of the network.
-* Easy to add new nodes.
-**Disadvantages:**
-* If the central hub fails, the entire network goes down.
-* Performance is dependent on the capability of the central hub.
-* Can be more expensive due to the cost of the central device.
-**Applicable Protocols:** This centralized topology does not use ad hoc protocols. A common infrastructure protocol is **802.11 (Wi-Fi)**.`;
-        case 'ring topology':
-            return `**Definition:** In a ring topology, each node is connected to exactly two other nodes, forming a single continuous pathway for signals through each node - like a circle.
-**Use Cases:** Often used in metropolitan area networks (MANs) and some office buildings.
-**Advantages:**
-* Performs better than a bus topology under heavy network load.
-* Prevents network collisions due to its unidirectional data flow.
-* No central hub required.
-**Disadvantages:**
-* Failure of one node or cable can disrupt the entire network.
-* Changes made to the network, like adding or removing nodes, affect the whole network.
-* Troubleshooting is difficult as a single fault can be hard to locate.
-**Applicable Protocols:** The primary protocol is **Token Ring**. It is not typically used for dynamic ad hoc networks.`;
-        case 'mesh topology':
-            return `**Definition:** A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths, meaning most nodes are connected to multiple other nodes.
-**Use Cases:** Ideal for critical applications like city-wide Wi-Fi, public safety communications, and large-scale ad hoc networks where reliability is paramount.
-**Advantages:**
-* Highly robust; failure of one node rarely disrupts the network.
-* Can handle high amounts of traffic.
-* Adding new nodes does not disrupt network communication.
-**Disadvantages:**
-* Can be very expensive and complex to install and maintain due to extensive cabling.
-* High potential for redundant connections, which can be inefficient.
-**Applicable Protocols:** The primary protocol is **AODV** (Ad hoc On-Demand Distance Vector). Alternatives include **DSR** and **OLSR**.`;
-        case 'cluster mesh topology':
-            return `**Definition:** A hybrid topology where nodes are organized into groups or 'clusters,' each with a designated cluster head. Connections within each cluster are dense (like a mesh), and cluster heads are interconnected.
-**Use Cases:** Excellent for large, scalable mobile ad hoc networks (MANETs) or wireless sensor networks where energy efficiency and organization are key.
-**Advantages:**
-* Combines the scalability of a cluster/star topology with the robustness of a mesh.
-* Improves routing efficiency and reduces overhead.
-* Enhances network lifetime by rotating cluster heads.
-**Disadvantages:**
-* More complex to manage due to the hierarchical structure.
-* Performance can depend heavily on the cluster head selection algorithm.
-**Applicable Protocols:** The primary protocol is **ZRP** (Zone Routing Protocol). An alternative for simple clustering is **LEACH**.`;
-        default:
-            return `**Definition:** This is a custom or hybrid network configuration, often forming dynamic clusters where nodes group together based on proximity or other criteria.
-**Use Cases:** Suited for dynamic environments like mobile ad hoc networks (MANETs) or wireless sensor networks where nodes are mobile or may be added/removed frequently.
-**Advantages:**
-* Can be highly adaptive and energy-efficient.
-* Scalable for large numbers of nodes.
-**Disadvantages:**
-* Overhead in maintaining clusters can be high.
-* Can be complex to implement and manage.
-**Applicable Protocols:** The primary protocol is **LEACH** (Low-Energy Adaptive Clustering Hierarchy). An alternative for more complex routing is **ZRP**.`;
-    }
+**Recommended Protocol:**
+For a ${data.topology}, the most suitable protocol is typically **AODV** (Ad hoc On-demand Distance Vector). It's a reactive protocol that establishes routes only when they are needed, which reduces overhead in dynamic networks. It discovers routes using a route request/reply query cycle, making it efficient for mobile nodes.
+
+**General Advantages:**
+* Good for dynamic environments where nodes are mobile.
+* Generally offers high reliability due to multiple potential paths.
+* Can be highly scalable depending on the specific implementation.
+
+**General Disadvantages:**
+* Can have high setup latency as routes are discovered on-demand.
+* May suffer from control overhead in very large or dense networks.
+* Not always the most efficient in terms of energy consumption.
+
+**AI Insights on Your Design:**
+Your specific design is a moderately sized ${data.topology} with ${data.nodeCount} nodes. The use of ${data.routerCount} routers creates a strong backbone. The average node degree of ${data.avgDegree.toFixed(2)} indicates good connectivity, but the ${data.isolatedNodes} isolated nodes need to be connected. The overall energy efficiency of ${data.avgEnergyEfficiency.toFixed(1)}% is healthy, though the ${data.weakNodes} weak nodes are a concern.
+
+**Recommendations:**
+* Use the 'Connect Nodes' mode to link the ${data.isolatedNodes} isolated node(s) to ensure full network participation.
+* Navigate to the "Report Dashboard" and use the "Remove Weaker Nodes & Reconstruct" feature to improve long-term stability.
+* Consider adding more connections between routers to create more direct, high-speed paths if delay is a critical metric.
+    `;
   }
 }
 

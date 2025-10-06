@@ -1,3 +1,4 @@
+
 import React, { forwardRef, useState, useEffect } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -281,7 +282,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
       </div>
       <div ref={ref}>
         <div className="p-4 bg-gray-900 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div id="performance-grid" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {processedData.map((paramData) => (
                     <div key={paramData.name} className="bg-gray-800/50 p-4 rounded-lg border border-cyan-500/10 shadow-lg h-full flex flex-col min-h-[320px]">
                         <h3 className="text-md font-semibold text-center text-cyan-200 mb-1">{paramData.name}</h3>
@@ -297,7 +298,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
         {liveChartData.length > 0 && (
             <div className="mt-8">
                 <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Live Performance Monitoring</h2>
-                <div className="p-4 bg-gray-900 rounded-lg grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div id="live-charts" className="p-4 bg-gray-900 rounded-lg grid grid-cols-1 xl:grid-cols-2 gap-6">
                     <LiveChart
                         data={liveChartData}
                         title="Packet Delivery Ratio"

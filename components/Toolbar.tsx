@@ -1,5 +1,6 @@
+
 import React, { useState, useRef } from 'react';
-import { NetworkComponentType, NetworkTopology } from '../types';
+import { NetworkComponentType, NetworkTopology, SimulationParameters } from '../types';
 import { NodeIcon } from './NodeIcon';
 
 interface ToolbarProps {
@@ -11,14 +12,12 @@ interface ToolbarProps {
   onToggleConnectionMode: () => void;
   isPacketSimulationMode: boolean;
   onTogglePacketSimulationMode: () => void;
-  onAutoConnect: (k: number) => void;
-  onConnectSelected: () => void;
-  numSelectedNodes: number;
   onDownloadReport: () => void;
   analysisPerformed: boolean;
   isDownloadingReport: boolean;
   onSaveNetwork: () => void;
   onLoadNetwork: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onDownloadParameterGraph: (parameter: keyof SimulationParameters) => void;
 }
 
 const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEvent, type: NetworkComponentType) => void }> = ({ type, onDragStart }) => {
@@ -58,22 +57,20 @@ const Toolbar: React.FC<ToolbarProps> = ({
     onToggleConnectionMode, 
     isPacketSimulationMode,
     onTogglePacketSimulationMode,
-    onAutoConnect,
-    onConnectSelected,
-    numSelectedNodes,
     onDownloadReport,
     analysisPerformed,
     isDownloadingReport,
     onSaveNetwork,
-    onLoadNetwork
+    onLoadNetwork,
+    onDownloadParameterGraph
 }) => {
   const [generateCount, setGenerateCount] = useState(50);
-  const [topology, setTopology] = useState<NetworkTopology>('cluster');
-  const [kNeighbors, setKNeighbors] = useState(2);
+  const [topology, setTopology] = useState<NetworkTopology>('cluster-mesh');
   const [includeRouters, setIncludeRouters] = useState(true);
   const [includeSwitches, setIncludeSwitches] = useState(false);
   const [numClusterHeads, setNumClusterHeads] = useState(3);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isGraphDropdownOpen, setIsGraphDropdownOpen] = useState(false);
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
     e.dataTransfer.setData('application/reactflow', type);
@@ -87,6 +84,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
       }
       onGenerateNetwork(generateCount, topology, includeRouters, includeSwitches, numClusterHeads);
   }
+
+  const handleGraphDownloadClick = (parameter: keyof SimulationParameters) => {
+    onDownloadParameterGraph(parameter);
+    setIsGraphDropdownOpen(false);
+  };
 
   const showRouterOption = ['cluster', 'cluster-mesh', 'random', 'mesh', 'grid'].includes(topology);
   const routerLabel = (topology === 'cluster' || topology === 'cluster-mesh')
@@ -201,14 +203,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <span>{isConnectionMode ? 'Exit Connection Mode' : 'Connect Nodes'}</span>
             </button>
              <button
-                onClick={onConnectSelected}
-                disabled={numSelectedNodes !== 2}
-                className="w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 bg-cyan-600 text-white hover:bg-cyan-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
-             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0l-1.5-1.5a2 2 0 112.828-2.828l1.5 1.5 3-3zm-2.5 10a2 2 0 012.828 0l3 3a2 2 0 01-2.828 2.828l-3-3a2 2 0 010-2.828zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
-                <span>Connect Selected ({Math.min(numSelectedNodes, 2)}/2)</span>
-            </button>
-             <button
                 onClick={onTogglePacketSimulationMode}
                 disabled={nodeCount < 2}
                 className={`w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed ${
@@ -220,31 +214,6 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
                 <span>{isPacketSimulationMode ? 'Cancel Simulation' : 'Simulate Packet Flow'}</span>
             </button>
-        </div>
-
-        <div className="mt-4">
-            <label htmlFor="k-neighbors" className="block text-sm font-medium text-gray-300 mb-1">Auto-Connect Nearest</label>
-            <div className="flex items-center space-x-2">
-                <input
-                    id="k-neighbors"
-                    type="number"
-                    value={kNeighbors}
-                    onChange={(e) => setKNeighbors(Math.max(1, parseInt(e.target.value, 10)) || 1)}
-                    min="1"
-                    max={nodeCount > 1 ? nodeCount - 1 : 1}
-                    className="w-1/3 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-                    aria-label="Number of nearest neighbors to connect"
-                    disabled={nodeCount < 2}
-                />
-                <button
-                    onClick={() => onAutoConnect(kNeighbors)}
-                    disabled={nodeCount < 2}
-                    className="flex-grow px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
-                >
-                    <span>Connect</span>
-                </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Replaces all existing connections.</p>
         </div>
       </div>
 
@@ -296,18 +265,41 @@ const Toolbar: React.FC<ToolbarProps> = ({
             )}
             <span>{isAnalyzing ? 'Analyzing...' : 'Analyze Network'}</span>
         </button>
-        <button
-            onClick={onDownloadReport}
-            disabled={!analysisPerformed || isDownloadingReport}
-            className="w-full px-5 py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-        >
-            {isDownloadingReport ? (
-                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+              onClick={onDownloadReport}
+              disabled={!analysisPerformed || isDownloadingReport}
+              className="w-full px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+              {isDownloadingReport ? (
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              )}
+              <span>Full Report</span>
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setIsGraphDropdownOpen(prev => !prev)}
+              disabled={isDownloadingReport}
+              className="w-full px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" /><path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" /></svg>
+              <span>Download Graph</span>
+            </button>
+            {isGraphDropdownOpen && (
+              <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-md shadow-lg z-10 animate-fadeIn" onMouseLeave={() => setIsGraphDropdownOpen(false)}>
+                <ul className="text-sm text-white">
+                  <li><button onClick={() => handleGraphDownloadClick('Packet Delivery Ratio')} className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded-t-md">PDR vs Nodes</button></li>
+                  <li><button onClick={() => handleGraphDownloadClick('Throughput (Mbps)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Throughput vs Nodes</button></li>
+                  <li><button onClick={() => handleGraphDownloadClick('End-to-end Delay (ms)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Delay vs Nodes</button></li>
+                  <li><button onClick={() => handleGraphDownloadClick('Energy Efficiency')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Energy Efficiency vs Nodes</button></li>
+                  <li><button onClick={() => handleGraphDownloadClick('Network Lifetime (days)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded-b-md">Lifetime vs Nodes</button></li>
+                </ul>
+              </div>
             )}
-            <span>{isDownloadingReport ? 'Generating...' : 'Download Full Report'}</span>
-        </button>
+          </div>
+        </div>
       </div>
     </div>
   );
