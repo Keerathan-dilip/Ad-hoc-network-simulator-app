@@ -1,5 +1,43 @@
+
 import { Node, Connection, SimulationParameters, NetworkComponentType } from '../types';
-import { SIMULATION_RESULTS } from '../constants';
+
+type PerformanceState = 'before' | 'after';
+
+const scalabilityMap: { [key: string]: number } = {
+  'Low': 0.6,
+  'Medium': 0.75,
+  'Medium-High': 0.85,
+  'High': 0.95,
+};
+
+const performanceData: { [key: number]: { [key in PerformanceState]: any } } = {
+  2: { // Manually crafted for a small, efficient network
+    before: { 'Packet Delivery Ratio': 0.98, 'End-to-End Delay (ms)': 20, 'Energy Consumption (J)': 10, 'Network Lifetime (hours)': 100, 'Scalability': 'Low', 'Computational Efficiency (%)': 98, 'Energy Efficiency': 0.98, 'Robustness Index': 0.95, 'Throughput (Mbps)': 15 },
+    after: { 'Packet Delivery Ratio': 0.99, 'End-to-End Delay (ms)': 15, 'Energy Consumption (J)': 8, 'Network Lifetime (hours)': 110, 'Scalability': 'Low', 'Computational Efficiency (%)': 99, 'Energy Efficiency': 0.99, 'Robustness Index': 0.98, 'Throughput (Mbps)': 18 }
+  },
+  50: {
+    before: { 'Packet Delivery Ratio': 0.92, 'End-to-End Delay (ms)': 60, 'Energy Consumption (J)': 55, 'Network Lifetime (hours)': 68, 'Scalability': 'Low', 'Computational Efficiency (%)': 90, 'Energy Efficiency': 0.92, 'Robustness Index': 0.85, 'Throughput (Mbps)': 7 },
+    after: { 'Packet Delivery Ratio': 0.96, 'End-to-End Delay (ms)': 55, 'Energy Consumption (J)': 50, 'Network Lifetime (hours)': 70, 'Scalability': 'Medium', 'Computational Efficiency (%)': 94, 'Energy Efficiency': 0.96, 'Robustness Index': 0.90, 'Throughput (Mbps)': 8 }
+  },
+  150: {
+    before: { 'Packet Delivery Ratio': 0.88, 'End-to-End Delay (ms)': 95, 'Energy Consumption (J)': 240, 'Network Lifetime (hours)': 52, 'Scalability': 'Medium', 'Computational Efficiency (%)': 85, 'Energy Efficiency': 0.88, 'Robustness Index': 0.78, 'Throughput (Mbps)': 7.5 },
+    after: { 'Packet Delivery Ratio': 0.93, 'End-to-End Delay (ms)': 80, 'Energy Consumption (J)': 210, 'Network Lifetime (hours)': 58, 'Scalability': 'High', 'Computational Efficiency (%)': 90, 'Energy Efficiency': 0.93, 'Robustness Index': 0.85, 'Throughput (Mbps)': 9 }
+  },
+  250: {
+    before: { 'Packet Delivery Ratio': 0.85, 'End-to-End Delay (ms)': 120, 'Energy Consumption (J)': 480, 'Network Lifetime (hours)': 46, 'Scalability': 'Medium', 'Computational Efficiency (%)': 83, 'Energy Efficiency': 0.85, 'Robustness Index': 0.75, 'Throughput (Mbps)': 8 },
+    after: { 'Packet Delivery Ratio': 0.91, 'End-to-End Delay (ms)': 95, 'Energy Consumption (J)': 420, 'Network Lifetime (hours)': 53, 'Scalability': 'High', 'Computational Efficiency (%)': 89, 'Energy Efficiency': 0.91, 'Robustness Index': 0.83, 'Throughput (Mbps)': 9.5 }
+  },
+  350: {
+    before: { 'Packet Delivery Ratio': 0.82, 'End-to-End Delay (ms)': 150, 'Energy Consumption (J)': 720, 'Network Lifetime (hours)': 42, 'Scalability': 'Medium-High', 'Computational Efficiency (%)': 80, 'Energy Efficiency': 0.82, 'Robustness Index': 0.70, 'Throughput (Mbps)': 7.5 },
+    after: { 'Packet Delivery Ratio': 0.88, 'End-to-End Delay (ms)': 120, 'Energy Consumption (J)': 650, 'Network Lifetime (hours)': 50, 'Scalability': 'High', 'Computational Efficiency (%)': 87, 'Energy Efficiency': 0.88, 'Robustness Index': 0.80, 'Throughput (Mbps)': 9 }
+  },
+  500: {
+    before: { 'Packet Delivery Ratio': 0.80, 'End-to-End Delay (ms)': 180, 'Energy Consumption (J)': 1100, 'Network Lifetime (hours)': 36, 'Scalability': 'Medium', 'Computational Efficiency (%)': 75, 'Energy Efficiency': 0.80, 'Robustness Index': 0.65, 'Throughput (Mbps)': 9 },
+    after: { 'Packet Delivery Ratio': 0.87, 'End-to-End Delay (ms)': 140, 'Energy Consumption (J)': 950, 'Network Lifetime (hours)': 45, 'Scalability': 'High', 'Computational Efficiency (%)': 85, 'Energy Efficiency': 0.87, 'Robustness Index': 0.78, 'Throughput (Mbps)': 11 }
+  }
+};
+
+const dataPoints = Object.keys(performanceData).map(Number).sort((a, b) => a - b);
 
 // This is a simplified analysis service for demonstration purposes.
 class NetworkAnalysisService {
@@ -186,86 +224,75 @@ class NetworkAnalysisService {
     topology: string,
     nodes: Node[],
     connections: Connection[],
-    maliciousNodeIds: string[] = []
+    maliciousNodeIds: string[] = [],
+    state: PerformanceState = 'before'
   ): { 'AI-Based': SimulationParameters; 'Traditional': SimulationParameters } {
     const nodeCount = nodes.length;
-    if (nodeCount === 0) {
-      return { 
-        'AI-Based': { ...SIMULATION_RESULTS['AI-Based'] }, 
-        'Traditional': { ...SIMULATION_RESULTS['Traditional'] } 
-      };
+    const aiBased = {} as SimulationParameters;
+    
+    if (nodeCount < 2) {
+        const emptyParams = {
+            'Packet Delivery Ratio': 0, 'End-to-end Delay (ms)': 0, 'Energy Consumption (J)': 0,
+            'Network Lifetime (days)': 0, 'Scalability Index': 0, 'Computational Efficiency (%)': 0,
+            'Energy Efficiency': 0, 'Robustness Index': 0, 'Throughput (Mbps)': 0,
+        };
+        return { 'AI-Based': emptyParams, 'Traditional': emptyParams };
     }
-
-    // --- Component analysis ---
-    const endNodes = nodes.filter(n => n.type === NetworkComponentType.NODE);
-    const routers = nodes.filter(n => n.type === NetworkComponentType.ROUTER);
-    const baseStations = nodes.filter(n => n.type === NetworkComponentType.BASE_STATION);
     
-    // --- Network health and power metrics ---
-    const avgEndNodeEfficiency = endNodes.length > 0 ? endNodes.reduce((sum, n) => sum + n.energyEfficiency, 0) / endNodes.length / 100 : 1.0;
-    const totalEnergyConsumptionRate = nodes.reduce((sum, n) => sum + n.energySpent, 0);
+    let lowerBound = dataPoints[0];
+    let upperBound = dataPoints[dataPoints.length - 1];
 
-    // --- Get base simulation results ---
-    const aiBased = { ...SIMULATION_RESULTS['AI-Based'] };
-    const traditional = { ...SIMULATION_RESULTS['Traditional'] };
+    for (let i = 0; i < dataPoints.length - 1; i++) {
+        if (nodeCount >= dataPoints[i] && nodeCount <= dataPoints[i + 1]) {
+            lowerBound = dataPoints[i];
+            upperBound = dataPoints[i + 1];
+            break;
+        }
+    }
+    if (nodeCount > dataPoints[dataPoints.length - 1]) {
+        lowerBound = dataPoints[dataPoints.length - 2];
+        upperBound = dataPoints[dataPoints.length - 1];
+    }
     
-    // --- Apply modifiers ---
-    // 1. Packet Delivery Ratio (based on topology and node health)
-    const lowerCaseTopology = topology.toLowerCase();
-    let pdrRange: [number, number] = [0.70, 0.85]; // Default for Cluster
-    if (lowerCaseTopology.includes('mesh') && lowerCaseTopology.includes('cluster')) pdrRange = [0.80, 0.95];
-    else if (lowerCaseTopology.includes('mesh')) pdrRange = [0.85, 1.00];
-    else if (lowerCaseTopology.includes('star')) pdrRange = [0.60, 0.80];
-    else if (lowerCaseTopology.includes('grid')) pdrRange = [0.55, 0.75];
-    else if (lowerCaseTopology.includes('ring')) pdrRange = [0.50, 0.70];
-    else if (lowerCaseTopology.includes('bus')) pdrRange = [0.40, 0.60];
-    
-    const normalizedHealth = (avgEndNodeEfficiency - 0.8) / (1.0 - 0.8); // Maps 0.8 health -> 0, 1.0 health -> 1
-    const basePdr = pdrRange[0] + (normalizedHealth * (pdrRange[1] - pdrRange[0]));
-    aiBased['Packet Delivery Ratio'] = basePdr;
+    const lowerData = performanceData[lowerBound][state];
+    const upperData = performanceData[upperBound][state];
 
+    const progress = (nodeCount - lowerBound) / (upperBound - lowerBound);
 
-    // 2. Performance boost from infrastructure (Routers, Base Stations)
-    const infraBoost = 1.0 + (routers.length * 0.02) + (baseStations.length * 0.05);
-    aiBased['Packet Delivery Ratio'] *= infraBoost;
-    aiBased['Robustness Index'] *= infraBoost;
-    aiBased['Throughput (Mbps)'] *= infraBoost;
-    aiBased['End-to-end Delay (ms)'] /= Math.sqrt(infraBoost); // Better infra reduces delay
-    
-    // 3. Energy & Lifetime (based on actual component consumption and end-node health)
-    const totalBaseConsumption = 500; // From constants.ts for ~50 nodes
-    const consumptionFactor = totalEnergyConsumptionRate / totalBaseConsumption;
-    
-    const healthBoost = 1 + Math.max(0, (avgEndNodeEfficiency - 0.85) * 0.5); // Increased impact
-    aiBased['Packet Delivery Ratio'] *= healthBoost;
-    aiBased['Throughput (Mbps)'] *= healthBoost;
+    const interpolate = (key: string) => {
+        let lowerVal = lowerData[key];
+        let upperVal = upperData[key];
 
-    aiBased['Energy Consumption (J)'] *= consumptionFactor;
-    traditional['Energy Consumption (J)'] *= consumptionFactor * 1.15;
-    
-    // Set Energy Efficiency directly based on node health
-    aiBased['Energy Efficiency'] = avgEndNodeEfficiency;
-    traditional['Energy Efficiency'] = aiBased['Energy Efficiency'] * 0.95;
+        if (key === 'Scalability') {
+            lowerVal = scalabilityMap[lowerVal] || 0;
+            upperVal = scalabilityMap[upperVal] || 0;
+        }
+        
+        return lowerVal + (upperVal - lowerVal) * progress;
+    };
 
-    // Enhanced lifetime factor for more noticeable change after removing weak nodes
-    const lifetimeFactor = avgEndNodeEfficiency > 0 ? ((avgEndNodeEfficiency ** 3) / (consumptionFactor * 0.4)) : 0;
-    aiBased['Network Lifetime (days)'] *= lifetimeFactor;
-    traditional['Network Lifetime (days)'] *= lifetimeFactor * 0.85;
-    
-    // 4. Scalability, Delay & Throughput (affected by node count and connection density)
-    const scaleFactor = 1 + (endNodes.length / 150);
-    aiBased['End-to-end Delay (ms)'] *= scaleFactor;
-    traditional['End-to-end Delay (ms)'] *= scaleFactor * 1.1;
+    aiBased['Packet Delivery Ratio'] = interpolate('Packet Delivery Ratio');
+    aiBased['End-to-end Delay (ms)'] = interpolate('End-to-End Delay (ms)');
+    aiBased['Energy Consumption (J)'] = interpolate('Energy Consumption (J)');
+    aiBased['Network Lifetime (days)'] = interpolate('Network Lifetime (hours)') / 24;
+    aiBased['Scalability Index'] = interpolate('Scalability');
+    aiBased['Computational Efficiency (%)'] = interpolate('Computational Efficiency (%)');
+    aiBased['Energy Efficiency'] = interpolate('Energy Efficiency');
+    aiBased['Robustness Index'] = interpolate('Robustness Index');
+    aiBased['Throughput (Mbps)'] = interpolate('Throughput (Mbps)');
 
-    const connectionDensity = nodeCount > 0 ? connections.length / nodeCount : 0;
-    const densityModifier = 1 + (connectionDensity / 5); // Boost for dense networks
-    aiBased['Throughput (Mbps)'] *= densityModifier;
-    
-    // Traditional protocol PDR and throughput are derived from AI's performance
-    traditional['Packet Delivery Ratio'] = aiBased['Packet Delivery Ratio'] * 0.9;
-    traditional['Throughput (Mbps)'] *= densityModifier * 0.9;
+    const traditional = { ...aiBased };
+    traditional['Packet Delivery Ratio'] *= 0.92;
+    traditional['End-to-end Delay (ms)'] *= 1.25;
+    traditional['Energy Consumption (J)'] *= 1.18;
+    traditional['Network Lifetime (days)'] *= 0.85;
+    traditional['Scalability Index'] *= 0.9;
+    traditional['Computational Efficiency (%)'] *= 0.95;
+    traditional['Energy Efficiency'] *= 0.93;
+    traditional['Robustness Index'] *= 0.88;
+    traditional['Throughput (Mbps)'] *= 0.8;
 
-    // 5. Malicious Node Penalties
+    // Apply malicious node penalties, primarily to traditional protocol
     if (maliciousNodeIds.length > 0) {
         const attackSeverity = 1 + maliciousNodeIds.length / nodes.length * 5;
         traditional['Packet Delivery Ratio'] *= (0.3 / attackSeverity);
@@ -273,27 +300,22 @@ class NetworkAnalysisService {
         traditional['Robustness Index'] *= 0.2;
         traditional['Network Lifetime (days)'] *= 0.5;
         traditional['Throughput (Mbps)'] *= (0.1 / attackSeverity);
-        // AI model is resilient
-        aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 1.05);
+        // AI model is resilient, but still takes a small hit
+        aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 0.95);
+        aiBased['Packet Delivery Ratio'] *= 0.98;
     }
     
     // Final cleanup: Clamp percentage-based values and round numbers
     Object.keys(aiBased).forEach(key => {
         const paramKey = key as keyof SimulationParameters;
         
-        if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index', 'Adaptability Rate'].includes(key)) {
-            // Clamp AI performance between a reasonable floor and a high ceiling
+        if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index'].includes(key)) {
             aiBased[paramKey] = Math.max(0.40, Math.min(0.99, aiBased[paramKey]));
-            
-            // Clamp Traditional performance to be slightly lower, with a floor
-            // and ensure it's always at least a bit worse than AI for clear visual separation
             const tradUpperCap = Math.min(0.95, aiBased[paramKey] - 0.05);
             traditional[paramKey] = Math.max(0.35, Math.min(tradUpperCap, traditional[paramKey]));
-        }
-        
-        if (['End-to-end Delay (ms)', 'Energy Consumption (J)', 'Network Lifetime (days)', 'Computational Efficiency (ops/J)', 'Throughput (Mbps)'].includes(key)) {
-            aiBased[paramKey] = Math.round(aiBased[paramKey]);
-            traditional[paramKey] = Math.round(traditional[paramKey]);
+        } else {
+             aiBased[paramKey] = Math.round(aiBased[paramKey]);
+             traditional[paramKey] = Math.round(traditional[paramKey]);
         }
     });
 

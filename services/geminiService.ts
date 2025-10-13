@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 interface NetworkInsightsData {
@@ -76,7 +75,7 @@ class GeminiService {
       Provide a concise, one-paragraph definition of a "${data.topology}".
 
       **Recommended Protocol:**
-      State the primary ad hoc routing protocol most suitable for a general "${data.topology}" network. Then, in the same paragraph, briefly explain its mechanism and why it's a good fit. Wrap the protocol name in double asterisks (e.g., **AODV**).
+      Name one or two primary ad hoc routing protocols most suitable for a general "${data.topology}" network (e.g., AODV, DSR, ZRP, OLSR). Then, in the same paragraph, briefly explain their mechanisms and why they are a good fit. **You must wrap all protocol names in double asterisks** (e.g., **AODV** or **ZRP**).
 
       **General Advantages:**
       List 2-3 key general advantages of the "${data.topology}". Start each point on a new line with an asterisk (*).

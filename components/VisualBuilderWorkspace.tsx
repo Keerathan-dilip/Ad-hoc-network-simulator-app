@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Node, Connection, NetworkComponentType, NetworkTopology, AnimatedPacket, DeliveredPacketInfo, SimulationParameters } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -97,9 +96,10 @@ interface VisualBuilderWorkspaceProps {
     saveSnapshot: () => void;
     clusterHeadIds: string[];
     setClusterHeadIds: React.Dispatch<React.SetStateAction<string[]>>;
+    addToHistory: (name: string) => void;
 }
 
-const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections, saveSnapshot, clusterHeadIds, setClusterHeadIds }) => {
+const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections, saveSnapshot, clusterHeadIds, setClusterHeadIds, addToHistory }) => {
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   
@@ -127,6 +127,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [nodeInitialPositions, setNodeInitialPositions] = useState<Map<string, {x: number, y: number}> | null>(null);
 
   // State for new features
+  const [isGeneratingNetwork, setIsGeneratingNetwork] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [isolatedMaliciousNodeIds, setIsolatedMaliciousNodeIds] = useState<string[]>([]);
   const [droppedPacketEvents, setDroppedPacketEvents] = useState<{ id: string, x: number, y: number }[]>([]);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -520,7 +522,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         }, 0);
     }, [nodes]);
 
-  const generateNetwork = useCallback((
+  const generateNetwork = useCallback(async (
     count: number, 
     topology: NetworkTopology,
     includeRouters: boolean,
@@ -534,30 +536,46 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     }
     if (!canvasViewportRef.current) return;
 
-    saveSnapshot();
-    clearAnalysis();
+    setIsGeneratingNetwork(true);
+    setLoadingMessage(`Generating ${count}-node ${topology} network...`);
     
-    const { clientWidth, clientHeight } = canvasViewportRef.current;
-    const { nodes: newNodes, connections: newConnections, clusterHeadIds: newClusterHeadIds } = 
-        networkGenerationService.generateNetworkLayout(
-            count,
-            topology,
-            includeRouters,
-            includeSwitches,
-            numClusterHeads,
-            { width: clientWidth, height: clientHeight }
-        );
+    try {
+        let delay = 0;
+        if (count <= 50)       delay = 5000;
+        else if (count <= 150) delay = 10000;
+        else if (count <= 250) delay = 15000;
+        else if (count <= 350) delay = 25000;
+        else                   delay = 40000;
 
-    setNodes(newNodes);
-    setConnections(newConnections);
-    setClusterHeadIds(newClusterHeadIds);
-    setSelectedNodeIds([]);
-    setIsConnectionMode(false);
-    
-    // Use timeout to ensure nodes are rendered before fitting
-    setTimeout(() => handleFitToView(), 100);
+        await new Promise(resolve => setTimeout(resolve, delay));
 
-  }, [setNodes, setConnections, setClusterHeadIds, clearAnalysis, saveSnapshot, handleFitToView]);
+        saveSnapshot();
+        clearAnalysis();
+        
+        const { clientWidth, clientHeight } = canvasViewportRef.current;
+        const { nodes: newNodes, connections: newConnections, clusterHeadIds: newClusterHeadIds } = 
+            networkGenerationService.generateNetworkLayout(
+                count,
+                topology,
+                includeRouters,
+                includeSwitches,
+                numClusterHeads,
+                { width: clientWidth, height: clientHeight }
+            );
+
+        setNodes(newNodes);
+        setConnections(newConnections);
+        setClusterHeadIds(newClusterHeadIds);
+        setSelectedNodeIds([]);
+        setIsConnectionMode(false);
+        addToHistory(`Generated ${count}-node ${topology} network`);
+        
+        setTimeout(() => handleFitToView(), 100);
+    } finally {
+        setIsGeneratingNetwork(false);
+        setLoadingMessage(null);
+    }
+  }, [setNodes, setConnections, setClusterHeadIds, clearAnalysis, saveSnapshot, handleFitToView, addToHistory]);
 
   const updateNode = useCallback((updatedNode: Node) => {
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
@@ -602,6 +620,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
+    setLoadingMessage('Analyzing network performance...');
     setAnalysisContent(null);
     setIdentifiedTopology(null);
     setSimulationParams(null);
@@ -613,6 +632,16 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     startMobility();
 
     try {
+      const nodeCount = nodes.length;
+      let generationDelay = 0;
+      if (nodeCount <= 50)       generationDelay = 5000;
+      else if (nodeCount <= 150) generationDelay = 10000;
+      else if (nodeCount <= 250) generationDelay = 15000;
+      else if (nodeCount <= 350) generationDelay = 25000;
+      else                       generationDelay = 40000;
+      
+      await new Promise(resolve => setTimeout(resolve, generationDelay / 2));
+      
       const maliciousNodeIds = nodes.filter(n => n.isMalicious).map(n => n.id);
       setIsolatedMaliciousNodeIds(maliciousNodeIds); // Simulate AI isolating the nodes
 
@@ -622,7 +651,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       
       const analysisPromise = geminiService.getStructuredAnalysis({ ...networkData, topology });
 
-      const params = networkAnalysisService.simulatePerformance(topology, nodes, connections, maliciousNodeIds);
+      const params = networkAnalysisService.simulatePerformance(topology, nodes, connections, maliciousNodeIds, 'before');
       setSimulationParams(params);
       setHasAnalyzedOnce(true);
       
@@ -648,6 +677,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       setAnalysisContent("**Error:** Could not generate network analysis. The API may be unavailable or the key may be invalid.");
     } finally {
       setIsAnalyzing(false);
+      setLoadingMessage(null);
       stopMobility();
     }
   };
@@ -1077,7 +1107,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);
         const analysisPromise = geminiService.getStructuredAnalysis({ ...networkData, topology: newTopology });
         
-        const params = networkAnalysisService.simulatePerformance(newTopology, newNodes, newConnections);
+        const params = networkAnalysisService.simulatePerformance(newTopology, newNodes, newConnections, [], 'after');
         setSimulationParams(params);
 
         const newAnalysis = await analysisPromise;
@@ -1099,6 +1129,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     if (nodes.length === 0) {
         return; // Button is disabled, but this is a safeguard
     }
+    addToHistory('Saved current network layout');
     const dataToSave = {
         nodes,
         connections,
@@ -1106,7 +1137,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     const jsonString = JSON.stringify(dataToSave, null, 2);
     setNetworkDataToSave(jsonString);
     setIsSaveModalOpen(true);
-  }, [nodes, connections]);
+  }, [nodes, connections, addToHistory]);
 
   const performSave = useCallback((fileName: string, content: string) => {
     let parsedContent;
@@ -1207,6 +1238,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   isAnalyzing={isAnalyzing} 
                   nodeCount={nodes.length}
                   onGenerateNetwork={generateNetwork}
+                  isGeneratingNetwork={isGeneratingNetwork}
                   isConnectionMode={isConnectionMode}
                   onToggleConnectionMode={toggleConnectionMode}
                   isPacketSimulationMode={isPacketSimulationMode}
@@ -1259,6 +1291,15 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
 
           </div>
           <div className="w-full lg:w-3/4 xl:w-4/5 relative">
+             {(isGeneratingNetwork || isAnalyzing) && (
+                <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-lg">
+                    <svg className="animate-spin h-10 w-10 text-cyan-400 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-xl font-bold text-cyan-200">{loadingMessage}</p>
+                </div>
+            )}
             <div ref={canvasViewportRef} className="w-full h-full bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 overflow-auto">
                 <NetworkCanvas
                     ref={canvasRef}

@@ -1,3 +1,4 @@
+
 export enum Workspace {
   CODE = 'CODE',
   VISUAL = 'VISUAL',
@@ -64,9 +65,8 @@ export interface SimulationParameters {
   'Energy Consumption (J)': number;
   'Network Lifetime (days)': number;
   'Scalability Index': number;
-  'Computational Efficiency (ops/J)': number;
+  'Computational Efficiency (%)': number;
   'Energy Efficiency': number;
   'Robustness Index': number;
-  'Adaptability Rate': number;
   'Throughput (Mbps)': number;
 }

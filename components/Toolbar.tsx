@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { NetworkComponentType, NetworkTopology, SimulationParameters } from '../types';
 import { NodeIcon } from './NodeIcon';
@@ -8,6 +7,7 @@ interface ToolbarProps {
   isAnalyzing: boolean;
   nodeCount: number;
   onGenerateNetwork: (count: number, topology: NetworkTopology, includeRouters: boolean, includeSwitches: boolean, numClusterHeads: number) => void;
+  isGeneratingNetwork: boolean;
   isConnectionMode: boolean;
   onToggleConnectionMode: () => void;
   isPacketSimulationMode: boolean;
@@ -52,7 +52,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     onAnalyze, 
     isAnalyzing, 
     nodeCount, 
-    onGenerateNetwork, 
+    onGenerateNetwork,
+    isGeneratingNetwork,
     isConnectionMode, 
     onToggleConnectionMode, 
     isPacketSimulationMode,
@@ -127,7 +128,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     value={generateCount}
                     onChange={(e) => setGenerateCount(Math.max(0, parseInt(e.target.value, 10)))}
                     max="450"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    disabled={isGeneratingNetwork}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:bg-gray-600"
                     aria-label="Number of nodes to generate"
                 />
              </div>
@@ -136,7 +138,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <select 
                     value={topology}
                     onChange={(e) => setTopology(e.target.value as NetworkTopology)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    disabled={isGeneratingNetwork}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:bg-gray-600"
                     aria-label="Network topology for generation"
                 >
                     <option value="cluster">Cluster</option>
@@ -159,28 +162,40 @@ const Toolbar: React.FC<ToolbarProps> = ({
                         onChange={(e) => setNumClusterHeads(Math.max(1, parseInt(e.target.value, 10)))}
                         min="1"
                         max={generateCount > 1 ? generateCount - 1 : 1}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                        disabled={isGeneratingNetwork}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none disabled:bg-gray-600"
                         aria-label="Number of cluster heads to generate"
                     />
                 </div>
              )}
              <div className="space-y-2">
                 {showRouterOption && (
-                    <label className="flex items-center space-x-2 cursor-pointer animate-fadeIn">
-                        <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
+                    <label className={`flex items-center space-x-2 animate-fadeIn ${isGeneratingNetwork ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} disabled={isGeneratingNetwork} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
                         <span className="text-sm text-gray-300">{routerLabel}</span>
                     </label>
                 )}
-                 <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" checked={includeSwitches} onChange={e => setIncludeSwitches(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
+                 <label className={`flex items-center space-x-2 ${isGeneratingNetwork ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                    <input type="checkbox" checked={includeSwitches} onChange={e => setIncludeSwitches(e.target.checked)} disabled={isGeneratingNetwork} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
                     <span className="text-sm text-gray-300">Include Switches</span>
                 </label>
              </div>
              <button
                 onClick={handleGenerate}
-                className="w-full px-5 py-2 bg-indigo-500 text-white font-bold rounded-lg hover:bg-indigo-600 transition-all duration-300 flex items-center justify-center space-x-2"
+                disabled={isGeneratingNetwork}
+                className="w-full px-5 py-2 bg-indigo-500 text-white font-bold rounded-lg hover:bg-indigo-600 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
              >
-                <span>Generate Network</span>
+                {isGeneratingNetwork ? (
+                    <>
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Generating...</span>
+                    </>
+                ) : (
+                    <span>Generate Network</span>
+                )}
              </button>
         </div>
       </div>

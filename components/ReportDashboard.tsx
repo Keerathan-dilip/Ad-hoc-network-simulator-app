@@ -43,10 +43,9 @@ const PARAMETER_CONFIG: {
   { key: 'Energy Consumption (J)', higherIsBetter: false, displayName: 'Energy Conservation', unit: '(Higher is better)', chartType: 'line' },
   { key: 'Network Lifetime (days)', higherIsBetter: true, unit: 'days', chartType: 'stat' },
   { key: 'Scalability Index', higherIsBetter: true, unit: '', chartType: 'progress' },
-  { key: 'Computational Efficiency (ops/J)', higherIsBetter: true, unit: 'ops/J', chartType: 'bar' },
+  { key: 'Computational Efficiency (%)', higherIsBetter: true, unit: '%', chartType: 'bar' },
   { key: 'Energy Efficiency', higherIsBetter: true, unit: '%', chartType: 'pie' },
   { key: 'Robustness Index', higherIsBetter: true, unit: '', chartType: 'progress' },
-  { key: 'Adaptability Rate', higherIsBetter: true, unit: '', chartType: 'progress' },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
