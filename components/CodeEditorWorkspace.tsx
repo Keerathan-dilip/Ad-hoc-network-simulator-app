@@ -11,9 +11,6 @@ import Chatbot from './Chatbot';
 interface CodeEditorWorkspaceProps {
   nodes: Node[];
   connections: Connection[];
-  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
-  setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
-  setClusterHeadIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 type ResultsTab = 'charts' | 'awk';
@@ -47,7 +44,7 @@ const MetricChart: React.FC<{ data: any }> = ({ data }) => {
     );
 };
 
-const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connections, setNodes, setConnections, setClusterHeadIds }) => {
+const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connections }) => {
   const [simulationData, setSimulationData] = useState<any[] | null>(null);
   const [awkOutput, setAwkOutput] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -61,6 +58,7 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
   const [highlightedTclLine, setHighlightedTclLine] = useState<number | null>(null);
   const [highlightedAwkLine, setHighlightedAwkLine] = useState<number | null>(null);
   const animationIntervalRef = useRef<number | null>(null);
+  const [identifiedTopology, setIdentifiedTopology] = useState<string>('Not Analyzed');
 
   useEffect(() => {
     const newCppCode = codeGenerationService.generateCppCode(nodes, connections);
@@ -114,6 +112,7 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
         animate(ANIMATION_SEQUENCES.awk, setHighlightedAwkLine, () => {
           // All animations finished, now show results based on visual builder network
           const topology = networkAnalysisService.identifyTopology(nodes, connections);
+          setIdentifiedTopology(topology);
           const results = networkAnalysisService.simulatePerformance(topology, nodes, connections);
           
           const formattedData = Object.keys(results['AI-Based']).map(key => ({
@@ -246,9 +245,14 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
         </div>
       </div>
       <Chatbot 
-        setNodes={setNodes}
-        setConnections={setConnections}
-        setClusterHeadIds={setClusterHeadIds}
+        nodes={nodes}
+        connections={connections}
+        topology={identifiedTopology}
+        cppCode={cppCode}
+        tclCode={tclCode}
+        awkCode={awkCode}
+        simulationData={simulationData}
+        awkOutput={awkOutput}
       />
     </div>
   );

@@ -120,9 +120,6 @@ const App: React.FC = () => {
             <CodeEditorWorkspace 
                 nodes={nodes} 
                 connections={connections}
-                setNodes={setNodes}
-                setConnections={setConnections}
-                setClusterHeadIds={setClusterHeadIds}
             />
         )}
         {activeWorkspace === Workspace.VISUAL && (

@@ -1,4 +1,6 @@
+
 import { GoogleGenAI } from "@google/genai";
+import { Node, Connection } from '../types';
 
 interface NetworkInsightsData {
   nodeCount: number;
@@ -22,30 +24,70 @@ class GeminiService {
     }
   }
 
-  // FIX: Add getTopologyDescription method to satisfy call from Chatbot.tsx
-  public async getTopologyDescription(topology: string): Promise<string> {
+  public async getChatResponse(
+    prompt: string,
+    history: { role: 'user' | 'model'; parts: { text: string }[] }[],
+    context: {
+      nodes: Node[];
+      connections: Connection[];
+      topology: string;
+      cppCode: string;
+      tclCode: string;
+      awkCode: string;
+      simulationData: any[] | null;
+      awkOutput: string | null;
+    }
+  ): Promise<string> {
     if (!this.ai) {
-      console.warn("API_KEY not found. Using mock data for topology description.");
-      return this.getMockTopologyDescription(topology);
+      console.warn("API_KEY not found. Using mock data for chat response.");
+      return this.getMockChatResponse(prompt);
     }
 
-    const prompt = `
-      Provide a concise, one-paragraph explanation of a "${topology}" network topology for a user in a simulation tool.
-      Explain its main characteristics, key advantages, and common disadvantages or use cases.
-      Structure the explanation to be easily understandable for someone learning about networks.
-      Highlight key terms by wrapping them in double asterisks, for example, **decentralized** or **single point of failure**.
-    `;
+    const systemInstruction = `You are an expert network analyst assistant integrated into an Ad Hoc Network Simulator application.
+Your goal is to help the user understand their network simulation, the generated code, and general networking concepts.
+You have access to the current state of the simulation. Be concise and helpful. Format your answers using Markdown.
+Use **bold** for key terms, \`code\` for code snippets, and lists for clarity.
+
+Here is the current context of the application:
+- **Network State**: ${context.nodes.length} nodes and ${context.connections.length} connections.
+- **Identified Topology**: ${context.topology}.
+- **Generated Code**: The user has access to C++, TCL, and AWK code for simulation. If asked about the code, refer to the following content:
+  - C++ (NS-3): \n\`\`\`cpp\n${context.cppCode}\n\`\`\`
+  - TCL (NS-2): \n\`\`\`tcl\n${context.tclCode}\n\`\`\`
+  - AWK: \n\`\`\`awk\n${context.awkCode}\n\`\`\`
+- **Simulation Results**:
+    - Performance Charts Data: ${context.simulationData ? JSON.stringify(context.simulationData, null, 2) : 'Not yet run.'}
+    - Final AWK Output: ${context.awkOutput || 'Not yet run.'}
+
+Answer the user's questions based on this context. If the question is general, answer it from your knowledge base.
+If the user asks to generate a network, you MUST state that network generation is handled by the "Network Generator" in the "Visual Builder" workspace and that you are here to help with analysis and questions.
+Do not attempt to generate a network yourself. Your responses should be helpful and directly related to the user's query and the provided simulation context.`;
+    
+    const contents = [...history, { role: 'user', parts: [{ text: prompt }] }];
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt,
+        contents,
+        config: {
+          systemInstruction,
+        },
       });
       return response.text;
     } catch (error) {
-      console.error(`Error fetching topology description from Gemini API for ${topology}:`, error);
-      return `**Error:** Could not get information about the ${topology} topology.`;
+      console.error("Error fetching chat response from Gemini API:", error);
+      return "**Error:** Could not get a response from the AI. The API may be unavailable or the key may be invalid.";
     }
+  }
+
+  private getMockChatResponse(prompt: string): string {
+    if (prompt.toLowerCase().includes('code')) {
+        return "The C++ code is for setting up an NS-3 simulation. It creates nodes, sets up a mobility model, and installs an AODV routing protocol. It's a foundational script for a more complex simulation."
+    }
+    if (prompt.toLowerCase().includes('topology')) {
+        return "The topology of your network seems to be a **Hybrid** one. You can get a detailed analysis by running the 'Analyze Network' function in the Visual Builder."
+    }
+    return "I'm ready to help! I can answer questions about the C++, TCL, or AWK code, explain your simulation results, or discuss general networking topics. What would you like to know?";
   }
   
   public async getStructuredAnalysis(data: NetworkInsightsData): Promise<string> {
@@ -100,20 +142,6 @@ class GeminiService {
       console.error("Error fetching analysis from Gemini API:", error);
       return "**Error:** Could not generate network analysis. The API may be unavailable or the key may be invalid.";
     }
-  }
-
-  private getMockTopologyDescription(topology: string): string {
-    const descriptions: { [key: string]: string } = {
-        'cluster': `A **cluster** topology organizes nodes into groups. Each group has a **cluster head** that manages communication within its cluster and with other clusters. This hierarchical approach is excellent for **scalability** in large networks but can introduce latency if data has to travel between many clusters.`,
-        'mesh': `A **mesh** network is a **decentralized** system where nodes connect to many other nodes, creating multiple redundant paths. This makes it highly **resilient** to node failures. The main drawback is the potential for high routing overhead as the network grows.`,
-        'cluster-mesh': `This **hybrid** topology combines the best of both worlds. Nodes are grouped into **clusters** for scalability, but within each cluster, they form a **mesh** network for high resilience. It provides a good balance between robustness and efficiency.`,
-        'star': `In a **star** topology, all nodes are connected to a single, central hub (like a switch or base station). It's simple to manage and add new nodes. However, if the central hub fails, the entire network goes down, making it a **single point of failure**.`,
-        'ring': `A **ring** topology connects each node to exactly two other nodes, forming a single continuous pathway for signals. It's orderly and performs well under heavy load, but the failure of a single node or cable can break the entire loop.`,
-        'bus': `A **bus** topology uses a single backbone cable to which all nodes are connected. It's simple and inexpensive to set up. However, problems with the main cable can disable the entire network, and performance degrades as more nodes are added due to data collisions.`,
-        'grid': `A **grid** topology arranges nodes in a two-dimensional grid. It's a highly structured and redundant form of a mesh network, often used in high-performance computing. It offers good fault tolerance but can be inefficient for widespread ad hoc networks.`,
-        'random': `A **random** topology places nodes arbitrarily, simulating unpredictable real-world environments like a disaster area or a battlefield. It's useful for testing the **adaptability** of routing protocols under chaotic conditions.`,
-    };
-    return descriptions[topology as keyof typeof descriptions] || `A description for the ${topology} topology, highlighting its key features.`;
   }
 
   private getMockStructuredAnalysis(data: NetworkInsightsData): string {
