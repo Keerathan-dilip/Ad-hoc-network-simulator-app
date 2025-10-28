@@ -63,7 +63,8 @@ export interface SimulationParameters {
   'Packet Delivery Ratio': number;
   'End-to-end Delay (ms)': number;
   'Energy Consumption (J)': number;
-  'Network Lifetime (days)': number;
+  'Network Lifetime (hours)': number;
+  'Sustained Operations (cycles)': number;
   'Scalability Index': number;
   'Computational Efficiency (%)': number;
   'Energy Efficiency': number;

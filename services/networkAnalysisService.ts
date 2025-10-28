@@ -38,6 +38,7 @@ const performanceData: { [key: number]: { [key in PerformanceState]: any } } = {
 };
 
 const dataPoints = Object.keys(performanceData).map(Number).sort((a, b) => a - b);
+const AVERAGE_NODE_ENERGY_JOULES = 1000;
 
 // This is a simplified analysis service for demonstration purposes.
 class NetworkAnalysisService {
@@ -231,10 +232,10 @@ class NetworkAnalysisService {
     const aiBased = {} as SimulationParameters;
     
     if (nodeCount < 2) {
-        const emptyParams = {
+        const emptyParams: SimulationParameters = {
             'Packet Delivery Ratio': 0, 'End-to-end Delay (ms)': 0, 'Energy Consumption (J)': 0,
-            'Network Lifetime (days)': 0, 'Scalability Index': 0, 'Computational Efficiency (%)': 0,
-            'Energy Efficiency': 0, 'Robustness Index': 0, 'Throughput (Mbps)': 0,
+            'Network Lifetime (hours)': 0, 'Sustained Operations (cycles)': 0, 'Scalability Index': 0,
+            'Computational Efficiency (%)': 0, 'Energy Efficiency': 0, 'Robustness Index': 0, 'Throughput (Mbps)': 0,
         };
         return { 'AI-Based': emptyParams, 'Traditional': emptyParams };
     }
@@ -274,23 +275,35 @@ class NetworkAnalysisService {
     aiBased['Packet Delivery Ratio'] = interpolate('Packet Delivery Ratio');
     aiBased['End-to-end Delay (ms)'] = interpolate('End-to-End Delay (ms)');
     aiBased['Energy Consumption (J)'] = interpolate('Energy Consumption (J)');
-    aiBased['Network Lifetime (days)'] = interpolate('Network Lifetime (hours)') / 24;
+    aiBased['Network Lifetime (hours)'] = interpolate('Network Lifetime (hours)');
     aiBased['Scalability Index'] = interpolate('Scalability');
     aiBased['Computational Efficiency (%)'] = interpolate('Computational Efficiency (%)');
     aiBased['Energy Efficiency'] = interpolate('Energy Efficiency');
     aiBased['Robustness Index'] = interpolate('Robustness Index');
     aiBased['Throughput (Mbps)'] = interpolate('Throughput (Mbps)');
 
+    // Calculate Sustained Operations
+    const endNodesCount = nodes.filter(n => n.type === NetworkComponentType.NODE).length || 1;
+    const totalNetworkEnergy = endNodesCount * AVERAGE_NODE_ENERGY_JOULES;
+    
+    aiBased['Sustained Operations (cycles)'] = aiBased['Energy Consumption (J)'] > 0
+        ? totalNetworkEnergy / aiBased['Energy Consumption (J)']
+        : Infinity;
+
     const traditional = { ...aiBased };
     traditional['Packet Delivery Ratio'] *= 0.92;
     traditional['End-to-end Delay (ms)'] *= 1.25;
     traditional['Energy Consumption (J)'] *= 1.18;
-    traditional['Network Lifetime (days)'] *= 0.85;
+    traditional['Network Lifetime (hours)'] *= 0.85;
     traditional['Scalability Index'] *= 0.9;
     traditional['Computational Efficiency (%)'] *= 0.95;
     traditional['Energy Efficiency'] *= 0.93;
     traditional['Robustness Index'] *= 0.88;
     traditional['Throughput (Mbps)'] *= 0.8;
+    traditional['Sustained Operations (cycles)'] = traditional['Energy Consumption (J)'] > 0
+        ? totalNetworkEnergy / traditional['Energy Consumption (J)']
+        : Infinity;
+
 
     // Apply malicious node penalties, primarily to traditional protocol
     if (maliciousNodeIds.length > 0) {
@@ -298,7 +311,8 @@ class NetworkAnalysisService {
         traditional['Packet Delivery Ratio'] *= (0.3 / attackSeverity);
         traditional['End-to-end Delay (ms)'] *= (1.5 * attackSeverity);
         traditional['Robustness Index'] *= 0.2;
-        traditional['Network Lifetime (days)'] *= 0.5;
+        traditional['Network Lifetime (hours)'] *= 0.5;
+        traditional['Sustained Operations (cycles)'] *= 0.4;
         traditional['Throughput (Mbps)'] *= (0.1 / attackSeverity);
         // AI model is resilient, but still takes a small hit
         aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 0.95);

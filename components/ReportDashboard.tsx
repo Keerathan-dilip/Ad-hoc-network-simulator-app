@@ -1,4 +1,3 @@
-
 import React, { forwardRef, useState, useEffect } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -20,7 +19,7 @@ interface ReportDashboardProps {
   isUpdating: boolean;
 }
 
-type ChartType = 'pie' | 'line' | 'stat' | 'progress' | 'bar';
+type ChartType = 'pie' | 'line' | 'stat' | 'progress' | 'bar' | 'stat_combined';
 
 interface LiveDataPoint {
     time: string;
@@ -31,7 +30,7 @@ interface LiveDataPoint {
 }
 
 const PARAMETER_CONFIG: {
-    key: keyof SimulationParameters;
+    key: keyof SimulationParameters | 'Network Longevity';
     higherIsBetter: boolean;
     unit: string;
     displayName?: string;
@@ -41,7 +40,7 @@ const PARAMETER_CONFIG: {
   { key: 'Throughput (Mbps)', higherIsBetter: true, unit: 'Mbps', chartType: 'bar' },
   { key: 'End-to-end Delay (ms)', higherIsBetter: false, displayName: 'Responsiveness', unit: '(Higher is better)', chartType: 'line' },
   { key: 'Energy Consumption (J)', higherIsBetter: false, displayName: 'Energy Conservation', unit: '(Higher is better)', chartType: 'line' },
-  { key: 'Network Lifetime (days)', higherIsBetter: true, unit: 'days', chartType: 'stat' },
+  { key: 'Network Longevity', higherIsBetter: true, unit: 'hours (or sustained operation cycles)', displayName: 'Network Longevity', chartType: 'stat_combined' },
   { key: 'Scalability Index', higherIsBetter: true, unit: '', chartType: 'progress' },
   { key: 'Computational Efficiency (%)', higherIsBetter: true, unit: '%', chartType: 'bar' },
   { key: 'Energy Efficiency', higherIsBetter: true, unit: '%', chartType: 'pie' },
@@ -134,6 +133,21 @@ const KeyStatDisplay: React.FC<{ data: any }> = ({ data }) => (
     </div>
 );
 
+const LongevityStatDisplay: React.FC<{ data: any }> = ({ data }) => (
+    <div className="flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="mb-4">
+            <p className="text-4xl lg:text-5xl font-bold text-cyan-300">{data['AI-Based'].lifetime}h</p>
+            <p className="text-gray-300 text-sm">({data['AI-Based'].cycles} cycles)</p>
+            <p className="text-sm font-medium text-cyan-500 mt-1">AI-Based</p>
+        </div>
+        <div>
+            <p className="text-2xl font-semibold text-orange-400">{data['Traditional'].lifetime}h</p>
+            <p className="text-gray-400 text-xs">({data['Traditional'].cycles} cycles)</p>
+            <p className="text-xs font-medium text-orange-600 mt-1">Traditional</p>
+        </div>
+    </div>
+);
+
 const IndexProgress: React.FC<{ data: any }> = ({ data }) => {
     const aiValue = data['AI-Based'] * 100;
     const traditionalValue = data['Traditional'] * 100;
@@ -181,6 +195,7 @@ const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) 
         case 'pie': return <PieChartComponent data={data} />;
         case 'line': return <LineComparisonChart data={data} />;
         case 'stat': return <KeyStatDisplay data={data} />;
+        case 'stat_combined': return <LongevityStatDisplay data={data} />;
         case 'progress': return <IndexProgress data={data} />;
         case 'bar': return <BarComparisonChart data={data} />;
         default: return null;
@@ -237,6 +252,21 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
 
 
   const processedData = PARAMETER_CONFIG.map(config => {
+    if (config.key === 'Network Longevity') {
+        const aiLifetime = simulationData['AI-Based']['Network Lifetime (hours)'];
+        const aiCycles = simulationData['AI-Based']['Sustained Operations (cycles)'];
+        const tradLifetime = simulationData['Traditional']['Network Lifetime (hours)'];
+        const tradCycles = simulationData['Traditional']['Sustained Operations (cycles)'];
+
+        return {
+            name: config.displayName || config.key,
+            unit: config.unit,
+            chartType: config.chartType,
+            'AI-Based': { lifetime: aiLifetime, cycles: aiCycles },
+            'Traditional': { lifetime: tradLifetime, cycles: tradCycles },
+        };
+    }
+      
     const aiValue = simulationData['AI-Based'][config.key as keyof SimulationParameters];
     const traditionalValue = simulationData['Traditional'][config.key as keyof SimulationParameters];
 
@@ -287,7 +317,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
                         <h3 className="text-md font-semibold text-center text-cyan-200 mb-1">{paramData.name}</h3>
                         <p className="text-xs text-center text-gray-400 mb-3 h-4">{paramData.unit}</p>
                         <div className="flex-grow">
-                            <UnifiedChart data={paramData} type={paramData.chartType} />
+                            <UnifiedChart data={paramData} type={paramData.chartType as ChartType} />
                         </div>
                     </div>
                 ))}

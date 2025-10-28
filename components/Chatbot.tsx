@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Node, Connection } from '../types';
 import { geminiService } from '../services/geminiService';

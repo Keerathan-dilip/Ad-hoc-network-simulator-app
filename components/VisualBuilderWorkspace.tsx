@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Node, Connection, NetworkComponentType, NetworkTopology, AnimatedPacket, DeliveredPacketInfo, SimulationParameters } from '../types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot } from 'recharts';
 import NetworkCanvas from './NetworkCanvas';
 import Toolbar from './Toolbar';
 import PropertiesPanel from './PropertiesPanel';
@@ -103,7 +103,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   
-  const [simulationParams, setSimulationParams] = useState<any | null>(null);
+  const [simulationParams, setSimulationParams] = useState<{ 'AI-Based': SimulationParameters; 'Traditional': SimulationParameters; } | null>(null);
   const [analysisContent, setAnalysisContent] = useState<string | null>(null);
   const [identifiedTopology, setIdentifiedTopology] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -684,223 +684,368 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
 
   const handleDownloadFullReport = async () => {
     const canvasEl = canvasRef.current;
-    const reportEl = reportDashboardRef.current;
-  
-    if (!canvasEl || !reportEl || !analysisContent) {
-      alert("Please run an analysis first to generate all report components.");
-      return;
+    if (!canvasEl || !analysisContent || !simulationParams || !identifiedTopology) {
+        alert("Please run a full analysis first to generate all report components.");
+        return;
     }
-  
     setIsDownloadingReport(true);
-  
+
     try {
-      const { default: html2canvas } = await import('html2canvas');
-      const { default: jsPDF } = await import('jspdf');
-  
-      const pdf = new jsPDF('p', 'pt', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 40;
-      const contentWidth = pdfWidth - margin * 2;
-  
-      // Helper to add an image and return new Y position
-      const addImageToPdf = (canvas: HTMLCanvasElement, pdfInstance: typeof pdf, yPos: number): number => {
-        const imgData = canvas.toDataURL('image/png');
-        const imgProps = pdfInstance.getImageProperties(imgData);
-        const ratio = imgProps.height / imgProps.width;
-        let imgHeight = contentWidth * ratio;
-        
-        if (yPos + imgHeight > pdfHeight - margin) {
-            pdfInstance.addPage();
-            yPos = margin;
-        }
+        const { default: html2canvas } = await import('html2canvas');
+        const { default: jsPDF } = await import('jspdf');
+        const { createRoot } = await import('react-dom/client');
 
-        pdfInstance.addImage(imgData, 'PNG', margin, yPos, contentWidth, imgHeight);
-        return yPos + imgHeight;
-      };
-      
-      const renderAnalysisContent = (text: string, initialY: number, pdfInstance: typeof pdf): number => {
-          let y = initialY;
-          const sections: { [key: string]: string[] } = {};
-          let currentSection = '';
-  
-          text.split('\n').forEach(line => {
-              line = line.trim();
-              if (line.startsWith('**') && line.endsWith('**')) {
-                  currentSection = line.substring(2, line.length - 2);
-                  sections[currentSection] = [];
-              } else if (currentSection && line) {
-                  const content = line.startsWith('*') ? line.substring(1).trim() : line;
-                  if (content) sections[currentSection].push(content);
-              }
-          });
-  
-          Object.entries(sections).forEach(([title, content]) => {
-              if (y > pdfHeight - margin * 2) {
-                  pdfInstance.addPage();
-                  y = margin;
-              }
-              pdfInstance.setFont('helvetica', 'bold');
-              pdfInstance.setFontSize(14);
-              const titleLines = pdfInstance.splitTextToSize(title, contentWidth);
-              pdfInstance.text(titleLines, margin, y);
-              y += (titleLines.length * pdfInstance.getLineHeight()) / pdfInstance.internal.scaleFactor + 5;
-  
-              pdfInstance.setFont('helvetica', 'normal');
-              pdfInstance.setFontSize(10);
-              content.forEach(item => {
-                  if (y > pdfHeight - margin * 2) {
-                      pdfInstance.addPage();
-                      y = margin;
-                  }
-                  const itemText = (title.toLowerCase().includes('advantages') || title.toLowerCase().includes('disadvantages') || title.toLowerCase().includes('recommendations')) ? `• ${item}` : item;
-                  const itemLines = pdfInstance.splitTextToSize(itemText, contentWidth - 10); // Indent
-                  pdfInstance.text(itemLines, margin + 10, y);
-                  y += (itemLines.length * pdfInstance.getLineHeight()) / pdfInstance.internal.scaleFactor + 2;
-              });
-              y += 10;
-          });
-          return y;
-      };
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 40;
+        const contentWidth = pdfWidth - margin * 2;
+        let yPos = margin;
 
-      const renderTable = (pdfInstance: typeof pdf, startY: number, title: string, headers: string[], data: string[][]): number => {
-        let y = startY;
-        const rowHeight = 20;
-        const headerHeight = 25;
-        
-        if (y + headerHeight + rowHeight > pdfHeight - margin) {
-            pdfInstance.addPage();
-            y = margin;
-        }
+        const addPageBreaks = (currentY: number) => {
+            if (currentY > pdfHeight - margin * 2) {
+                pdf.addPage();
+                return margin;
+            }
+            return currentY;
+        };
 
-        pdfInstance.setFontSize(16);
-        pdfInstance.text(title, margin, y);
-        y += 30;
+        const renderText = (text: string, x: number, y: number, options: any = {}) => {
+            const lines = pdf.splitTextToSize(text, options.maxWidth || contentWidth);
+            pdf.text(lines, x, y, options);
+            return y + (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor; // Increased line spacing
+        };
 
-        const columnWidths = headers.map(() => contentWidth / headers.length);
+        const renderTitlePage = () => {
+            pdf.setFontSize(28);
+            pdf.text('Ad Hoc Network Simulation Report', pdfWidth / 2, pdfHeight / 2 - 60, { align: 'center' });
+            pdf.setFontSize(16);
+            pdf.text(`Analysis of a ${nodes.length}-Node ${identifiedTopology}`, pdfWidth / 2, pdfHeight / 2 - 30, { align: 'center' });
+            pdf.setFontSize(12);
+            pdf.text(`Report Generated: ${new Date().toLocaleString()}`, pdfWidth / 2, pdfHeight / 2 + 20, { align: 'center' });
+            pdf.addPage();
+        };
 
-        pdfInstance.setFont('helvetica', 'bold');
-        pdfInstance.setFontSize(10);
-        let x = margin;
-        headers.forEach((header, i) => {
-            pdfInstance.text(header, x + 2, y);
-            x += columnWidths[i];
-        });
-        y += 5;
-        pdfInstance.line(margin, y, pdfWidth - margin, y);
-        y += 15;
-        
-        pdfInstance.setFont('helvetica', 'normal');
-        pdfInstance.setFontSize(9);
-        
-        data.forEach(row => {
-            if (y + rowHeight > pdfHeight - margin) {
-                pdfInstance.addPage();
+        const renderSectionTitle = (title: string, y: number, newPage = false) => {
+            if (newPage) {
+                pdf.addPage();
                 y = margin;
-                pdfInstance.setFont('helvetica', 'bold');
-                pdfInstance.setFontSize(10);
-                x = margin;
-                headers.forEach((header, i) => {
-                    pdfInstance.text(header, x + 2, y);
+            }
+            y = addPageBreaks(y);
+            pdf.setFontSize(18);
+            pdf.text(title, margin, y);
+            pdf.setDrawColor(100, 100, 100);
+            pdf.line(margin, y + 8, pdfWidth - margin, y + 8);
+            return y + 30;
+        };
+
+        const renderTable = (startY: number, title: string, headers: string[][], data: string[][][]) => {
+            let y = startY;
+            y = addPageBreaks(y);
+            pdf.setFontSize(14);
+            y = renderText(title, margin, y, { maxWidth: contentWidth });
+            y += 5;
+            
+            headers.forEach((headerRow, tableIndex) => {
+                const tableData = data[tableIndex];
+                const columnWidths = headerRow.map(() => contentWidth / headerRow.length);
+                
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(10);
+                let x = margin;
+                y = addPageBreaks(y + 15);
+                headerRow.forEach((header, i) => {
+                    pdf.text(header, x + 2, y);
                     x += columnWidths[i];
                 });
                 y += 5;
-                pdfInstance.line(margin, y, pdfWidth - margin, y);
+                pdf.line(margin, y, pdfWidth - margin, y);
+                y += 10;
+                
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(9);
+                
+                tableData.forEach(row => {
+                    let maxRowHeight = 0;
+                     // Pre-calculate height of the tallest cell in the row
+                    row.forEach((cell, i) => {
+                        const lines = pdf.splitTextToSize(cell, columnWidths[i] - 4);
+                        const cellHeight = (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor;
+                        if (cellHeight > maxRowHeight) maxRowHeight = cellHeight;
+                    });
+
+                    y = addPageBreaks(y + maxRowHeight);
+                    x = margin;
+                    row.forEach((cell, i) => {
+                        renderText(cell, x + 2, y, { maxWidth: columnWidths[i] - 4 });
+                        x += columnWidths[i];
+                    });
+                    y += maxRowHeight + 5;
+                });
                 y += 15;
-                pdfInstance.setFont('helvetica', 'normal');
-                pdfInstance.setFontSize(9);
-            }
-            x = margin;
-            row.forEach((cell, i) => {
-                pdfInstance.text(cell, x + 2, y);
-                x += columnWidths[i];
             });
-            y += rowHeight;
+            return y;
+        };
+
+        const generateAndRenderGraph = async (parameter: keyof SimulationParameters) => {
+            const chartContainer = document.createElement('div');
+            chartContainer.style.position = 'absolute';
+            chartContainer.style.left = '-9999px';
+            chartContainer.style.width = '800px';
+            chartContainer.style.height = '500px';
+            chartContainer.style.backgroundColor = '#ffffff';
+            chartContainer.style.padding = '20px';
+            document.body.appendChild(chartContainer);
+
+            const nodeCounts = [10, 20, 40, 60, 80, 100, 120];
+            const graphData = [];
+            
+            const toGenerationTopology = (topology: string): NetworkTopology => {
+                const lower = topology.toLowerCase();
+                if (lower.includes('cluster-mesh')) return 'cluster-mesh';
+                if (lower.includes('cluster')) return 'cluster';
+                return 'random'; 
+            };
+            const generationTopology = toGenerationTopology(identifiedTopology);
+
+            for (const count of nodeCounts) {
+                const { nodes: simNodes, connections: simConnections } = networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
+                const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
+                graphData.push({ nodes: count, 'AI-Based': results['AI-Based'][parameter], 'Traditional': results['Traditional'][parameter] });
+            }
+
+            const currentUserDataPoint = { nodes: nodes.length, 'AI-Based': simulationParams['AI-Based'][parameter], 'Traditional': simulationParams['Traditional'][parameter] };
+
+            const ChartComponent = (
+                <div style={{width: '100%', height: '100%', fontFamily: 'sans-serif' }}>
+                  <h2 style={{color: '#333', textAlign: 'center', fontSize: '18px' }}>{parameter} vs. Number of Nodes ({identifiedTopology})</h2>
+                  <ResponsiveContainer width="100%" height="90%">
+                    <LineChart data={graphData} margin={{ top: 20, right: 40, left: 20, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
+                      <XAxis dataKey="nodes" type="number" stroke="#333" domain={['dataMin', 'dataMax']} label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -15, fill: '#333' }} />
+                      <YAxis stroke="#333" domain={['auto', 'auto']} label={{ value: String(parameter).split('(')[0], angle: -90, position: 'insideLeft', offset: -10, fill: '#333' }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line type="monotone" dataKey="AI-Based" stroke="#22d3ee" strokeWidth={2} dot={{r: 4}} activeDot={{r: 6}} />
+                      <Line type="monotone" dataKey="Traditional" stroke="#f97316" strokeWidth={2} dot={{r: 4}} activeDot={{r: 6}} />
+                      {/* FIX: Removed unsupported 'isFront' prop from ReferenceDot. */}
+<ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['AI-Based']} r={8} fill="#22d3ee" stroke="white" strokeWidth={2}/>
+                      {/* FIX: Removed unsupported 'isFront' prop from ReferenceDot. */}
+<ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Traditional']} r={8} fill="#f97316" stroke="white" strokeWidth={2}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+            );
+            
+            const root = createRoot(chartContainer);
+            root.render(ChartComponent);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const canvas = await html2canvas(chartContainer, { scale: 2 });
+            root.unmount();
+            document.body.removeChild(chartContainer);
+            return canvas;
+        };
+        
+        const getParameterInfo = (parameter: keyof SimulationParameters, currentNodes: Node[]) => {
+            const definitions: Record<string, string> = {
+                'Packet Delivery Ratio': 'The percentage of data packets that are successfully delivered from source to destination. A higher PDR indicates a more reliable network.',
+                'Throughput (Mbps)': 'The rate of successful data transfer through the network, measured in megabits per second. Higher throughput means more data can be sent in a given amount of time.',
+                'End-to-end Delay (ms)': 'The time it takes for a packet to travel from source to destination. Lower delay is crucial for real-time applications.',
+                'Energy Consumption (J)': 'The total amount of energy consumed by all nodes in the network during a simulation cycle. Lower consumption leads to longer network lifetime.',
+                'Network Lifetime (hours)': 'An estimation of how long the network can remain operational before nodes start failing due to energy depletion.',
+                'Robustness Index': 'A measure of the network\'s ability to maintain connectivity and performance despite node failures or attacks. A higher index indicates better resilience.',
+            };
+            const formulas: Record<string, { formula: string, headers: string[][], data: string[][][] }> = {
+                'Packet Delivery Ratio': {
+                    formula: 'PDR = (Total Packets Received / Total Packets Sent) * 100%',
+                    headers: [['Component', 'Description', 'Example Value']],
+                    data: [[
+                        ['Packets Sent', 'Total data packets initiated by source nodes in a simulation run.', '1000 packets'],
+                        ['Packets Received', 'Packets that successfully reached their intended destination without being dropped.', '985 packets'],
+                        ['Calculation', '(985 / 1000) * 100%', '98.5%'],
+                    ]]
+                },
+                'Throughput (Mbps)': {
+                    formula: 'Throughput = (Total Data Received (bits) / Total Time (seconds)) / 1,000,000',
+                     headers: [['Component', 'Description', 'Example Value']],
+                     data: [[
+                         ['Total Data Received', 'Sum of the sizes of all successfully delivered packets.', '8,000,000 bits'],
+                         ['Total Time', 'The duration of the simulation measurement period.', '10 seconds'],
+                         ['Calculation', '(8,000,000 / 10) / 1,000,000', '0.8 Mbps'],
+                     ]]
+                },
+                 'End-to-end Delay (ms)': {
+                     formula: 'Avg. Delay = Σ (Packet Rx Time - Packet Tx Time) / Total Packets Received',
+                     headers: [['Component', 'Description', 'Example Value']],
+                     data: [[
+                         ['Σ (Packet Rx - Tx)', 'The sum of transit times for all successful packets.', '15,000 ms'],
+                         ['Packets Received', 'Total packets that successfully reached their destination.', '985 packets'],
+                         ['Calculation', '15,000 ms / 985', '15.2 ms'],
+                     ]]
+                 },
+                 'Energy Consumption (J)': {
+                     formula: 'Total Consumption = Σ (Energy Spent by each node)',
+                      headers: [['Component', 'Description', 'Example Value']],
+                      data: [[
+                          ['Energy Spent (Node)', 'Energy used by a single node for transmitting, receiving, and processing.', '0.5 J per node'],
+                          ['Number of Nodes', 'Total active nodes in the network.', `${currentNodes.length} nodes`],
+                          ['Calculation', `0.5 J * ${currentNodes.length}`, `${0.5 * currentNodes.length} J`],
+                      ]]
+                 },
+                 'Network Lifetime (hours)': {
+                     formula: 'Lifetime = (Total Initial Energy / Total Consumption Rate)',
+                      headers: [['Component', 'Description', 'Value (Example)']],
+                      data: [[
+                          ['Total Initial Energy', 'Sum of the battery capacity of all mobile nodes.', `${currentNodes.filter(n => n.type === 'NODE').length * 1000} J`],
+                          ['Consumption Rate', 'Simulated energy consumed per hour of operation.', `${simulationParams['AI-Based']['Energy Consumption (J)'] * 10} J/hour`],
+                          ['Calculation', `(${currentNodes.filter(n => n.type === 'NODE').length * 1000}) / ${simulationParams['AI-Based']['Energy Consumption (J)'] * 10}`, `${((currentNodes.filter(n => n.type === 'NODE').length * 1000) / (simulationParams['AI-Based']['Energy Consumption (J)'] * 10)).toFixed(1)} hours`],
+                      ]]
+                 },
+                  'Robustness Index': {
+                     formula: 'Robustness = 1 - (Impact of Failure / Network Size)',
+                      headers: [['Component', 'Description', 'Example Value']],
+                      data: [[
+                          ['Impact of Failure', 'A simulated score representing performance degradation when nodes fail (e.g., PDR drop * delay increase).', '5.5'],
+                          ['Network Size', 'The total number of nodes in the network.', `${currentNodes.length}`],
+                          ['Calculation', `(1 - (5.5 / ${currentNodes.length})) * 100`, `${(1 - (5.5 / currentNodes.length)) * 100}%`],
+                      ]]
+                 },
+            };
+            const interpretations: Record<string, string> = {
+                'Packet Delivery Ratio': 'This graph shows network reliability. The AI protocol consistently maintains a higher PDR, especially as the network grows, indicating superior route selection and congestion management. Your network\'s PDR is highlighted, demonstrating its effectiveness within this trend.',
+                'Throughput (Mbps)': 'This graph illustrates network capacity. The AI protocol achieves higher throughput due to more efficient data paths and reduced overhead. The highlighted point shows your network\'s current capacity, which benefits from the AI\'s optimization.',
+                'End-to-end Delay (ms)': 'This graph represents network latency. Lower values are better. The AI protocol finds more optimal and less congested routes, significantly reducing delay. Your network\'s low latency, shown by the highlighted point, is a direct result of this intelligent routing.',
+                'Energy Consumption (J)': 'This graph shows network efficiency. Lower consumption is better. The AI protocol minimizes unnecessary transmissions and optimizes routes to conserve energy, a key factor in ad hoc networks. Your network\'s energy profile is highlighted, showing its efficiency.',
+                'Network Lifetime (hours)': 'This graph projects the network\'s operational lifespan. By optimizing energy consumption, the AI protocol dramatically extends the network\'s lifetime compared to traditional methods. The highlighted point shows the projected longevity of your current design.',
+                'Robustness Index': 'This graph measures resilience to failures. The AI protocol\'s ability to quickly adapt to changing topology and node failures results in a much higher robustness index. The highlighted point confirms your network\'s strong resilience under the AI protocol.',
+            };
+            const comparisons: Record<string, string> = {
+                'Packet Delivery Ratio': 'The AI-Enhanced algorithm is compared to traditional algorithms (like basic AODV or DSR) based on its decision-making criteria. Traditional methods often use a single metric, like shortest hop count, to determine a route. In contrast, the AI algorithm uses a multi-factor analysis, considering real-time link stability, predicted node energy levels, and potential network congestion. This allows it to proactively choose paths that are not just short, but also highly reliable, leading to fewer packet drops and a higher PDR.',
+                'Throughput (Mbps)': 'Comparison is based on traffic management and resource utilization. Traditional protocols can inadvertently create bottlenecks by routing excessive traffic through a single, shortest path. The AI algorithm implements intelligent load balancing, distributing traffic across several viable paths to prevent congestion at any single point. It also optimizes packet aggregation and scheduling, maximizing the amount of useful data transmitted over the network at any given time.',
+                'End-to-end Delay (ms)': 'The algorithms are compared based on their routing intelligence and adaptability. While a traditional protocol might choose a path with the fewest hops, it could be a highly congested or low-quality path, increasing overall delay. The AI algorithm analyzes real-time latency and bandwidth on various links, sometimes choosing a physically longer path if it is less congested and can deliver the packet faster. This predictive routing minimizes queuing delays at intermediate nodes.',
+                'Energy Consumption (J)': 'Comparison is based on the energy efficiency of the chosen routes. Traditional protocols are often energy-agnostic. The AI algorithm is designed with energy conservation as a core objective. It actively prioritizes routes that involve nodes with higher remaining energy and minimizes the total transmission power required for a successful delivery. This "energy-aware routing" is crucial for extending the life of battery-powered ad hoc networks.',
+                'Network Lifetime (hours)': 'This metric is a direct consequence of energy consumption, and the comparison is based on long-term network sustainability. Traditional protocols can lead to a "hotspot" problem, where centrally located nodes are overused for routing and their batteries deplete quickly, fracturing the network. The AI algorithm promotes "energy balancing" by rotating routing duties among nodes, ensuring that no single node is overburdened. This prevents premature node failures and significantly extends the total operational time of the entire network.',
+                'Robustness Index': 'Robustness is compared by evaluating the algorithm\'s response to network changes, such as node failures or mobility. Traditional protocols are typically reactive; they only begin to search for a new path *after* a link has already broken, which results in packet loss and high recovery latency. The AI algorithm is proactive. It continuously monitors link quality and node health, allowing it to predict imminent link failures and reroute traffic preemptively, ensuring a seamless transition with minimal disruption to data flow.',
+            };
+            return { definition: definitions[parameter], formulaInfo: formulas[parameter], interpretation: interpretations[parameter], comparison: comparisons[parameter] };
+        };
+
+        // --- RENDER PDF CONTENT ---
+        renderTitlePage();
+        yPos = renderSectionTitle('1. Network Topology Visualization', margin);
+        const canvasImage = await html2canvas(canvasEl, { backgroundColor: '#1f2937', useCORS: true, logging: false, scale: 2 });
+        pdf.addImage(canvasImage.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, contentWidth * (canvasImage.height / canvasImage.width));
+
+        yPos = renderSectionTitle('2. AI-Powered Analysis', margin, true);
+        const sections: { [key: string]: string[] } = {};
+        let currentSection = '';
+        analysisContent.split('\n').forEach(line => {
+            line = line.trim();
+            if (line.startsWith('**') && line.endsWith('**')) {
+                currentSection = line.substring(2, line.length - 2);
+                sections[currentSection] = [];
+            } else if (currentSection && line) {
+                const content = line.startsWith('*') ? line.substring(1).trim() : line;
+                if (content) sections[currentSection].push(content);
+            }
         });
-        return y;
-      };
-  
-      // --- PAGE 1: Title & Canvas ---
-      pdf.setFontSize(20);
-      pdf.text('Full Network Simulation Report', pdfWidth / 2, margin, { align: 'center' });
-      pdf.setFontSize(16);
-      pdf.text('1. Network Topology Visualization', margin, margin + 30);
-      const canvasImage = await html2canvas(canvasEl, { backgroundColor: '#1f2937', useCORS: true, logging: false, scale: 2 });
-      addImageToPdf(canvasImage, pdf, margin + 50);
-  
-      // --- PAGE 2: AI Analysis ---
-      pdf.addPage();
-      let yPos = margin;
-      pdf.setFontSize(16);
-      pdf.text('2. AI-Powered Analysis', margin, yPos);
-      yPos = renderAnalysisContent(analysisContent, yPos + 30, pdf);
-  
-      // --- PAGE 3: Performance Charts ---
-      pdf.addPage();
-      yPos = margin;
-      pdf.setFontSize(16);
-      pdf.text('3. Key Performance Metrics', margin, yPos);
-      const performanceGridEl = reportEl.querySelector('#performance-grid');
-      if (performanceGridEl) {
-        const performanceCanvas = await html2canvas(performanceGridEl as HTMLElement, { backgroundColor: '#111827', useCORS: true, scale: 2 });
-        yPos = addImageToPdf(performanceCanvas, pdf, yPos + 20);
-      }
-      
-      const liveChartsEl = reportEl.querySelector('#live-charts');
-      if (liveChartsEl) {
-          yPos += 20;
-          if (yPos > pdfHeight - 250) { // Check if there's enough space for the next chart
-              pdf.addPage();
-              yPos = margin;
-          }
-          pdf.setFontSize(16);
-          pdf.text('4. Live Performance Monitoring', margin, yPos);
-          const liveChartsCanvas = await html2canvas(liveChartsEl as HTMLElement, { backgroundColor: '#111827', useCORS: true, scale: 2 });
-          yPos = addImageToPdf(liveChartsCanvas, pdf, yPos + 20);
-      }
+        Object.entries(sections).forEach(([title, content]) => {
+            yPos = addPageBreaks(yPos);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            yPos = renderText(title, margin, yPos, {});
+            yPos += 5;
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            content.forEach(item => {
+                const itemText = (title.toLowerCase().includes('advantages') || title.toLowerCase().includes('disadvantages') || title.toLowerCase().includes('recommendations')) ? `• ${item}` : item;
+                yPos = renderText(itemText, margin + 10, yPos, { maxWidth: contentWidth - 10 });
+                yPos += 2;
+            });
+            yPos += 10;
+        });
 
-      // --- PAGE 4+: Data Tables ---
-      pdf.addPage();
-      yPos = margin;
-      const nodeHealthHeaders = ['Node ID', 'Type', 'Efficiency (%)', 'Spent (J)'];
-      const nodeHealthData = nodes.map((node, index) => ([
-        `Node ${index + 1}`,
-        node.type.replace('_', ' ').toLowerCase(),
-        `${node.energyEfficiency}`,
-        `${node.energySpent}`
-      ]));
-      yPos = renderTable(pdf, yPos, '5. Node Health Status', nodeHealthHeaders, nodeHealthData);
+        const parametersToDetail: (keyof SimulationParameters)[] = ['Packet Delivery Ratio', 'Throughput (Mbps)', 'End-to-end Delay (ms)', 'Energy Consumption (J)', 'Network Lifetime (hours)', 'Robustness Index'];
+        
+        let sectionCounter = 3;
+        for (const param of parametersToDetail) {
+            yPos = renderSectionTitle(`${sectionCounter}. Detailed Analysis: ${param}`, margin, true);
+            const { definition, formulaInfo, interpretation, comparison } = getParameterInfo(param, nodes);
+            
+            const graphCanvas = await generateAndRenderGraph(param);
+            const graphHeight = contentWidth * (graphCanvas.height / graphCanvas.width);
+            if (yPos + graphHeight > pdfHeight - margin) {
+                pdf.addPage();
+                yPos = margin;
+            }
+            pdf.addImage(graphCanvas.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, graphHeight);
+            yPos += graphHeight + 20;
 
-      const ipConfigHeaders = ['Node ID', 'IP Address'];
-      const ipConfigData = nodes.map((node, index) => ([
-        `Node ${index + 1}`,
-        node.ipAddress
-      ]));
-      yPos += 30;
-      if (yPos > pdfHeight - 100) {
-        pdf.addPage();
-        yPos = margin;
-      }
-      renderTable(pdf, yPos, '6. IP Address Configuration', ipConfigHeaders, ipConfigData);
-  
-      pdf.save("full-network-report.pdf");
+            yPos = addPageBreaks(yPos);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            yPos = renderText('Graph Interpretation', margin, yPos, {});
+            yPos += 5;
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            yPos = renderText(interpretation, margin, yPos, {});
+            yPos += 20;
+
+            yPos = addPageBreaks(yPos);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            yPos = renderText('Algorithm Comparison', margin, yPos, {});
+            yPos += 5;
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            yPos = renderText(comparison, margin, yPos, {});
+            yPos += 20;
+
+            yPos = addPageBreaks(yPos);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            yPos = renderText('Parameter Definition & Formula', margin, yPos, {});
+            yPos += 5;
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            yPos = renderText(definition, margin, yPos, {});
+            yPos += 15;
+
+            if (formulaInfo) {
+                yPos = renderTable(yPos, 'Conceptual Formula Breakdown', formulaInfo.headers, formulaInfo.data);
+            }
+
+            sectionCounter++;
+        }
+
+        pdf.save("full_network_report.pdf");
+
     } catch (error) {
-      console.error("Failed to generate PDF report:", error);
-      alert("An error occurred while generating the PDF report. Please check the console for details.");
+        console.error("Failed to generate PDF report:", error);
+        alert("An error occurred while generating the PDF report. Please check the console for details.");
     } finally {
-      setIsDownloadingReport(false);
+        setIsDownloadingReport(false);
     }
   };
+
 
   const handleDownloadParameterGraph = async (parameter: keyof SimulationParameters) => {
     setIsDownloadingReport(true);
     try {
+        const { createRoot } = await import('react-dom/client');
+        const chartContainer = document.createElement('div');
+        chartContainer.style.position = 'absolute';
+        chartContainer.style.left = '-9999px';
+        chartContainer.style.width = '800px';
+        chartContainer.style.height = '500px';
+        chartContainer.style.backgroundColor = '#111827';
+        chartContainer.style.padding = '20px';
+        document.body.appendChild(chartContainer);
+        
         const nodeCounts = [10, 30, 50, 80, 120, 150];
         const graphData = [];
         
         const currentTopology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
-
-        // FIX: Map the identified topology string to a valid NetworkTopology for generation.
         const toGenerationTopology = (topology: string): NetworkTopology => {
             const lower = topology.toLowerCase();
             if (lower.includes('cluster-mesh')) return 'cluster-mesh';
@@ -910,33 +1055,16 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             if (lower.includes('ring')) return 'ring';
             if (lower.includes('bus')) return 'bus';
             if (lower.includes('grid')) return 'grid';
-            return 'random'; // Fallback for hybrid, linear, etc.
+            return 'random'; 
         };
         const generationTopology = toGenerationTopology(currentTopology);
 
         for (const count of nodeCounts) {
-            const { nodes: simNodes, connections: simConnections } =
-                networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
-            
+            const { nodes: simNodes, connections: simConnections } = networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
             const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
-            
-            graphData.push({
-                nodes: count,
-                'AI-Based': results['AI-Based'][parameter],
-                'Traditional': results['Traditional'][parameter],
-            });
+            graphData.push({ nodes: count, 'AI-Based': results['AI-Based'][parameter], 'Traditional': results['Traditional'][parameter] });
         }
         
-        // Render chart to a hidden div
-        const chartContainer = document.createElement('div');
-        chartContainer.style.position = 'absolute';
-        chartContainer.style.left = '-9999px';
-        chartContainer.style.width = '800px';
-        chartContainer.style.height = '500px';
-        chartContainer.style.backgroundColor = '#111827';
-        chartContainer.style.padding = '20px';
-        document.body.appendChild(chartContainer);
-
         const ChartComponent = (
             <div style={{width: '100%', height: '100%'}}>
               <h2 style={{color: '#9ca3af', textAlign: 'center'}}>{parameter} vs. Number of Nodes ({currentTopology})</h2>
@@ -944,7 +1072,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 <LineChart data={graphData} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="nodes" stroke="#9ca3af" label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -5, fill: '#9ca3af' }} />
-                  <YAxis stroke="#9ca3af" label={{ value: parameter, angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
+                  <YAxis stroke="#9ca3af" label={{ value: String(parameter), angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
                   <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} />
                   <Legend />
                   <Line type="monotone" dataKey="AI-Based" stroke="#22d3ee" strokeWidth={2} />
@@ -954,11 +1082,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             </div>
         );
 
-        const { createRoot } = await import('react-dom/client');
         const root = createRoot(chartContainer);
         root.render(ChartComponent);
-
-        // Allow time for chart to render
         await new Promise(resolve => setTimeout(resolve, 500));
 
         const { default: html2canvas } = await import('html2canvas');

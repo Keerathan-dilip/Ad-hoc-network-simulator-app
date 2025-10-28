@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { NetworkComponentType, NetworkTopology, SimulationParameters } from '../types';
 import { NodeIcon } from './NodeIcon';
@@ -309,7 +310,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                   <li><button onClick={() => handleGraphDownloadClick('Throughput (Mbps)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Throughput vs Nodes</button></li>
                   <li><button onClick={() => handleGraphDownloadClick('End-to-end Delay (ms)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Delay vs Nodes</button></li>
                   <li><button onClick={() => handleGraphDownloadClick('Energy Efficiency')} className="block w-full text-left px-4 py-2 hover:bg-gray-600">Energy Efficiency vs Nodes</button></li>
-                  <li><button onClick={() => handleGraphDownloadClick('Network Lifetime (days)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded-b-md">Lifetime vs Nodes</button></li>
+                  <li><button onClick={() => handleGraphDownloadClick('Network Lifetime (hours)')} className="block w-full text-left px-4 py-2 hover:bg-gray-600 rounded-b-md">Lifetime vs Nodes</button></li>
                 </ul>
               </div>
             )}
