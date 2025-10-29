@@ -1,4 +1,3 @@
-
 import { Node, Connection, NetworkComponentType, NetworkTopology } from '../types';
 import { networkAnalysisService } from './networkAnalysisService';
 
@@ -25,6 +24,11 @@ class NetworkGenerationService {
             const base = {
                 id: `${type.toLowerCase()}-${Date.now()}-${i}`, type, x: x + offsetX, y: y + offsetY,
                 ipAddress: `192.168.1.${i + 1}`, isMalicious: false,
+                sensorData: {
+                    temperature: 25.0, // Normal room temp
+                    humidity: 45.0, // Normal humidity
+                    signalInterference: -90, // Low interference
+                },
             };
             switch (type) {
                 case NetworkComponentType.ROUTER: return { ...base, energyEfficiency: 100, energySpent: 25, packetForwardingCapacity: 5000 };
@@ -111,7 +115,36 @@ class NetworkGenerationService {
                 }
             }
 
-        } else if (topology === 'random' || topology === 'mesh') {
+        } else if (topology === 'mesh') {
+            const numEndNodes = count > 1 ? count - 1 : 1;
+            // Create end nodes first
+            for (let i = 0; i < numEndNodes; i++) {
+                newNodes.push(createNode(i, Math.random() * canvasWidth, Math.random() * canvasHeight));
+            }
+            // Add base station if there's space
+            if (count > 1) {
+                const baseStation = createNode(numEndNodes, canvasWidth / 2, padding / 2, NetworkComponentType.BASE_STATION);
+                newNodes.push(baseStation);
+            }
+
+            // K-Nearest Neighbor for connectivity, treating all nodes as peers
+            const K_NEAREST = 3;
+            newNodes.forEach(sourceNode => {
+                const distances = newNodes
+                    .filter(n => n.id !== sourceNode.id)
+                    .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
+                    .sort((a, b) => a.dist - b.dist);
+
+                for (let k = 0; k < Math.min(K_NEAREST, distances.length); k++) {
+                    const targetNodeId = distances[k].id;
+                    const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
+                    if (!exists) {
+                        newConnections.push({ id: `${sourceNode.id}-${targetNodeId}-${Date.now()}`, from: sourceNode.id, to: targetNodeId });
+                    }
+                }
+            });
+
+        } else if (topology === 'random') {
             const baseStation = createNode(count, canvasWidth / 2, padding, NetworkComponentType.BASE_STATION);
             newNodes.push(baseStation);
 
@@ -132,155 +165,93 @@ class NetworkGenerationService {
                 }
             }
 
-            endNodes.forEach(node => {
-                const potentialTargets = [...infraNodes, ...endNodes.filter(n => n.id !== node.id)];
-                if (potentialTargets.length === 0) return;
-                potentialTargets.sort((a, b) => (Math.hypot(a.x - node.x, a.y - node.y) - Math.hypot(b.x - node.x, b.y - node.y)));
-                const target = potentialTargets[0];
-                newConnections.push({ id: `${node.id}-${target.id}-${Date.now()}`, from: node.id, to: target.id });
+            endNodes.forEach(endNode => {
+                if (infraNodes.length > 0) {
+                    let closestInfraNode = infraNodes[0];
+                    let minDistance = Infinity;
+                    infraNodes.forEach(infraNode => {
+                        const distance = Math.hypot(endNode.x - infraNode.x, endNode.y - infraNode.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestInfraNode = infraNode;
+                        }
+                    });
+                    newConnections.push({ id: `${endNode.id}-${closestInfraNode.id}-${Date.now()}`, from: endNode.id, to: closestInfraNode.id });
+                }
             });
 
-            if (topology === 'mesh') {
-                const K_NEAREST = 3;
-                const meshableNodes = newNodes.filter(n => n.type !== NetworkComponentType.BASE_STATION);
-                meshableNodes.forEach(sourceNode => {
-                    const distances = meshableNodes
-                        .filter(n => n.id !== sourceNode.id)
-                        .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
-                        .sort((a, b) => a.dist - b.dist);
-
-                    for (let k = 0; k < Math.min(K_NEAREST, distances.length); k++) {
-                        const targetNodeId = distances[k].id;
-                        const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
-                        if (!exists) {
-                            newConnections.push({ id: `${sourceNode.id}-${targetNodeId}-${Date.now()}`, from: sourceNode.id, to: targetNodeId });
-                        }
-                    }
-                });
-            }
         } else if (topology === 'grid') {
-            const baseStation = createNode(count, canvasWidth / 2, padding, NetworkComponentType.BASE_STATION);
-            newNodes.push(baseStation);
-
-            const numRouters = includeRouters ? Math.max(1, Math.floor(count / 25)) : 0;
             const cols = Math.ceil(Math.sqrt(count * (canvasWidth / canvasHeight)));
             const rows = Math.ceil(count / cols);
-            const xSpacing = canvasWidth / (cols + 1);
-            const ySpacing = (canvasHeight - padding * 2) / (rows + 1);
-            let routerPlaced = 0;
-            const gridNodes: Node[] = [];
+            const xSpacing = canvasWidth / (cols - 1 || 1);
+            const ySpacing = canvasHeight / (rows - 1 || 1);
 
             for (let i = 0; i < count; i++) {
                 const row = Math.floor(i / cols);
                 const col = i % cols;
-                const x = (col + 1) * xSpacing;
-                const y = (row + 1) * ySpacing + padding;
-
-                if (includeRouters && routerPlaced < numRouters && row > 0 && col > 0 && row < rows - 1 && col < cols - 1 && (row % 3 === 1 && col % 3 === 1)) {
-                    gridNodes.push(createNode(i, x, y, NetworkComponentType.ROUTER));
-                    routerPlaced++;
-                } else {
-                    gridNodes.push(createNode(i, x, y));
-                }
+                newNodes.push(createNode(i, col * xSpacing, row * ySpacing));
             }
-            newNodes.push(...gridNodes);
 
-            // Add grid connections
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    const currentIndex = r * cols + c;
-                    if (currentIndex >= gridNodes.length) continue;
-                    const currentNode = gridNodes[currentIndex];
-
-                    // Connect to right neighbor
-                    if (c < cols - 1) {
-                        const rightIndex = r * cols + (c + 1);
-                        if (rightIndex < gridNodes.length) {
-                            const rightNode = gridNodes[rightIndex];
-                            newConnections.push({ id: `conn-grid-${currentNode.id}-${rightNode.id}`, from: currentNode.id, to: rightNode.id });
-                        }
+            for (let i = 0; i < count; i++) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                if (col < cols - 1) { // Connect to the right
+                    const rightNeighborIndex = i + 1;
+                    if (rightNeighborIndex < count && Math.floor(rightNeighborIndex / cols) === row) {
+                        newConnections.push({ id: `${newNodes[i].id}-${newNodes[rightNeighborIndex].id}`, from: newNodes[i].id, to: newNodes[rightNeighborIndex].id });
                     }
-
-                    // Connect to bottom neighbor
-                    if (r < rows - 1) {
-                        const bottomIndex = (r + 1) * cols + c;
-                        if (bottomIndex < gridNodes.length) {
-                            const bottomNode = gridNodes[bottomIndex];
-                            newConnections.push({ id: `conn-grid-${currentNode.id}-${bottomNode.id}`, from: currentNode.id, to: bottomNode.id });
-                        }
+                }
+                if (row < rows - 1) { // Connect to the bottom
+                    const bottomNeighborIndex = i + cols;
+                    if (bottomNeighborIndex < count) {
+                        newConnections.push({ id: `${newNodes[i].id}-${newNodes[bottomNeighborIndex].id}`, from: newNodes[i].id, to: newNodes[bottomNeighborIndex].id });
                     }
                 }
             }
-
-            if (gridNodes.length > 0) {
-                gridNodes.sort((a, b) => Math.hypot(a.x - baseStation.x, a.y - baseStation.y) - Math.hypot(b.x - baseStation.x, b.y - baseStation.y));
-                const closestNode = gridNodes[0];
-                newConnections.push({ id: `${baseStation.id}-${closestNode.id}-${Date.now()}`, from: baseStation.id, to: closestNode.id });
-            }
-        } else if (topology === 'ring' || topology === 'bus') {
+        } else if (topology === 'ring') {
             const centerX = canvasWidth / 2;
             const centerY = canvasHeight / 2;
-            const baseStation = createNode(count, centerX, padding, NetworkComponentType.BASE_STATION);
-
-            const topologyNodes: Node[] = [];
-
-            if (topology === 'ring') {
-                const radiusX = canvasWidth / 2 - padding;
-                const radiusY = canvasHeight / 2 - padding;
-                for (let i = 0; i < count; i++) {
-                    const angle = (i / count) * 2 * Math.PI;
-                    topologyNodes.push(createNode(i, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle)));
-                }
-                for (let i = 0; i < count; i++) {
-                    newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[(i + 1) % count].id });
-                }
-            } else { // Bus
-                const xSpacing = canvasWidth / (count + 1);
-                for (let i = 0; i < count; i++) {
-                    topologyNodes.push(createNode(i, (i + 1) * xSpacing, centerY));
-                }
-                for (let i = 0; i < count - 1; i++) {
-                    newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[i + 1].id });
-                }
+            const radius = Math.min(centerX, centerY) * 0.8;
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * 2 * Math.PI;
+                newNodes.push(createNode(i, centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle)));
             }
-
-            if (topologyNodes.length > 0) {
-                topologyNodes.sort((a, b) => Math.hypot(a.x - baseStation.x, a.y - baseStation.y) - Math.hypot(b.x - baseStation.x, b.y - baseStation.y));
-                newConnections.push({ id: `${baseStation.id}-${topologyNodes[0].id}-${Date.now()}`, from: baseStation.id, to: topologyNodes[0].id });
+            for (let i = 0; i < count; i++) {
+                newConnections.push({ id: `conn-${i}`, from: newNodes[i].id, to: newNodes[(i + 1) % count].id });
             }
-
-            newNodes.push(baseStation, ...topologyNodes);
-
         } else if (topology === 'star') {
-            const centerX = canvasWidth / 2;
-            const centerY = canvasHeight / 2;
-            const hubNode = createNode(0, centerX, centerY, NetworkComponentType.BASE_STATION);
-            newNodes.push(hubNode);
-
-            if (count > 1) {
-                const peripheralCount = count - 1;
-                const radiusX = canvasWidth / 2 - padding;
-                const radiusY = canvasHeight / 2 - padding;
-                for (let i = 0; i < peripheralCount; i++) {
-                    const angle = (i / peripheralCount) * 2 * Math.PI;
-                    const pNode = createNode(i + 1, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle));
-                    newNodes.push(pNode);
-                    newConnections.push({ id: `${hubNode.id}-${pNode.id}-${Date.now()}`, from: pNode.id, to: hubNode.id });
-                }
+            const hubType = includeSwitches ? NetworkComponentType.SWITCH : NetworkComponentType.BASE_STATION;
+            const hub = createNode(0, canvasWidth / 2, canvasHeight / 2, hubType);
+            newNodes.push(hub);
+            for (let i = 1; i < count; i++) {
+                const angle = (i / (count - 1)) * 2 * Math.PI;
+                const radius = Math.min(canvasWidth, canvasHeight) / 2.5 * (0.5 + Math.random() * 0.5);
+                const node = createNode(i, hub.x - offsetX + radius * Math.cos(angle), hub.y - offsetY + radius * Math.sin(angle));
+                newNodes.push(node);
+                newConnections.push({ id: `conn-${i}`, from: hub.id, to: node.id });
+            }
+        } else if (topology === 'bus') {
+            const yPos = canvasHeight / 2;
+            const xSpacing = canvasWidth / (count - 1 || 1);
+            for (let i = 0; i < count; i++) {
+                newNodes.push(createNode(i, i * xSpacing, yPos));
+            }
+            for (let i = 0; i < count - 1; i++) {
+                newConnections.push({ id: `conn-${i}`, from: newNodes[i].id, to: newNodes[i + 1].id });
             }
         }
-
-        // Ensure all nodes are part of a single connected component
-        if (newNodes.length > 1) {
+        
+        // Ensure connectivity for all topologies
+        if (newNodes.length > 1 && !['star', 'bus'].includes(topology)) {
             const components = networkAnalysisService.findNetworkComponents(newNodes, newConnections);
             if (components.length > 1) {
-                components.sort((a, b) => b.length - a.length);
-                const mainComponent = components.shift()!;
-
-                for (const isolatedComponent of components) {
+                for (let i = 1; i < components.length; i++) {
+                    // Find the closest pair of nodes between the main component and the isolated one
                     let minDistance = Infinity;
                     let bestConnection: { from: string; to: string } | null = null;
-
+                    const mainComponent = components[0];
+                    const isolatedComponent = components[i];
+                    
                     for (const sourceNode of isolatedComponent) {
                         for (const targetNode of mainComponent) {
                             const distance = Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y);
@@ -290,10 +261,8 @@ class NetworkGenerationService {
                             }
                         }
                     }
-
                     if (bestConnection) {
-                        newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
-                        mainComponent.push(...isolatedComponent);
+                         newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
                     }
                 }
             }
@@ -302,5 +271,5 @@ class NetworkGenerationService {
         return { nodes: newNodes, connections: newConnections, clusterHeadIds: newClusterHeadIds };
     }
 }
-
+// FIX: Export an instance of the service to be used in other components.
 export const networkGenerationService = new NetworkGenerationService();

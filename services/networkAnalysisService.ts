@@ -1,43 +1,63 @@
-
-import { Node, Connection, SimulationParameters, NetworkComponentType } from '../types';
+import { Node, Connection, SimulationParameters, NetworkComponentType, NetworkTopology } from '../types';
 
 type PerformanceState = 'before' | 'after';
 
+
+// --- Data structure from user's table ---
+interface PerformanceSet {
+  pdr: number;
+  delay: number;
+  energyConsumption: number;
+  lifetime: number;
+  scalability: number;
+  compEfficiency: number;
+  energyEfficiency: number;
+  robustness: number;
+  throughput: number;
+}
+
+interface PerformanceTier {
+  range: [number, number];
+  before: PerformanceSet;
+  after: PerformanceSet;
+}
+
 const scalabilityMap: { [key: string]: number } = {
-  'Low': 0.6,
-  'Medium': 0.75,
-  'Medium-High': 0.85,
-  'High': 0.95,
+    'Low': 0.4,
+    'Medium': 0.6,
+    'Medium-High': 0.75,
+    'High': 0.9,
 };
 
-const performanceData: { [key: number]: { [key in PerformanceState]: any } } = {
-  2: { // Manually crafted for a small, efficient network
-    before: { 'Packet Delivery Ratio': 0.98, 'End-to-End Delay (ms)': 20, 'Energy Consumption (J)': 10, 'Network Lifetime (hours)': 100, 'Scalability': 'Low', 'Computational Efficiency (%)': 98, 'Energy Efficiency': 0.98, 'Robustness Index': 0.95, 'Throughput (Mbps)': 15 },
-    after: { 'Packet Delivery Ratio': 0.99, 'End-to-End Delay (ms)': 15, 'Energy Consumption (J)': 8, 'Network Lifetime (hours)': 110, 'Scalability': 'Low', 'Computational Efficiency (%)': 99, 'Energy Efficiency': 0.99, 'Robustness Index': 0.98, 'Throughput (Mbps)': 18 }
-  },
-  50: {
-    before: { 'Packet Delivery Ratio': 0.92, 'End-to-End Delay (ms)': 60, 'Energy Consumption (J)': 55, 'Network Lifetime (hours)': 68, 'Scalability': 'Low', 'Computational Efficiency (%)': 90, 'Energy Efficiency': 0.92, 'Robustness Index': 0.85, 'Throughput (Mbps)': 7 },
-    after: { 'Packet Delivery Ratio': 0.96, 'End-to-End Delay (ms)': 55, 'Energy Consumption (J)': 50, 'Network Lifetime (hours)': 70, 'Scalability': 'Medium', 'Computational Efficiency (%)': 94, 'Energy Efficiency': 0.96, 'Robustness Index': 0.90, 'Throughput (Mbps)': 8 }
-  },
-  150: {
-    before: { 'Packet Delivery Ratio': 0.88, 'End-to-End Delay (ms)': 95, 'Energy Consumption (J)': 240, 'Network Lifetime (hours)': 52, 'Scalability': 'Medium', 'Computational Efficiency (%)': 85, 'Energy Efficiency': 0.88, 'Robustness Index': 0.78, 'Throughput (Mbps)': 7.5 },
-    after: { 'Packet Delivery Ratio': 0.93, 'End-to-End Delay (ms)': 80, 'Energy Consumption (J)': 210, 'Network Lifetime (hours)': 58, 'Scalability': 'High', 'Computational Efficiency (%)': 90, 'Energy Efficiency': 0.93, 'Robustness Index': 0.85, 'Throughput (Mbps)': 9 }
-  },
-  250: {
-    before: { 'Packet Delivery Ratio': 0.85, 'End-to-End Delay (ms)': 120, 'Energy Consumption (J)': 480, 'Network Lifetime (hours)': 46, 'Scalability': 'Medium', 'Computational Efficiency (%)': 83, 'Energy Efficiency': 0.85, 'Robustness Index': 0.75, 'Throughput (Mbps)': 8 },
-    after: { 'Packet Delivery Ratio': 0.91, 'End-to-End Delay (ms)': 95, 'Energy Consumption (J)': 420, 'Network Lifetime (hours)': 53, 'Scalability': 'High', 'Computational Efficiency (%)': 89, 'Energy Efficiency': 0.91, 'Robustness Index': 0.83, 'Throughput (Mbps)': 9.5 }
-  },
-  350: {
-    before: { 'Packet Delivery Ratio': 0.82, 'End-to-End Delay (ms)': 150, 'Energy Consumption (J)': 720, 'Network Lifetime (hours)': 42, 'Scalability': 'Medium-High', 'Computational Efficiency (%)': 80, 'Energy Efficiency': 0.82, 'Robustness Index': 0.70, 'Throughput (Mbps)': 7.5 },
-    after: { 'Packet Delivery Ratio': 0.88, 'End-to-End Delay (ms)': 120, 'Energy Consumption (J)': 650, 'Network Lifetime (hours)': 50, 'Scalability': 'High', 'Computational Efficiency (%)': 87, 'Energy Efficiency': 0.88, 'Robustness Index': 0.80, 'Throughput (Mbps)': 9 }
-  },
-  500: {
-    before: { 'Packet Delivery Ratio': 0.80, 'End-to-End Delay (ms)': 180, 'Energy Consumption (J)': 1100, 'Network Lifetime (hours)': 36, 'Scalability': 'Medium', 'Computational Efficiency (%)': 75, 'Energy Efficiency': 0.80, 'Robustness Index': 0.65, 'Throughput (Mbps)': 9 },
-    after: { 'Packet Delivery Ratio': 0.87, 'End-to-End Delay (ms)': 140, 'Energy Consumption (J)': 950, 'Network Lifetime (hours)': 45, 'Scalability': 'High', 'Computational Efficiency (%)': 85, 'Energy Efficiency': 0.87, 'Robustness Index': 0.78, 'Throughput (Mbps)': 11 }
-  }
-};
+// Data derived from the user-provided performance table
+const performanceTiers: PerformanceTier[] = [
+    {
+        range: [1, 50],
+        before: { pdr: 0.92, delay: 60, energyConsumption: 55, lifetime: 68, scalability: scalabilityMap['Low'], compEfficiency: 90, energyEfficiency: 0.92, robustness: 0.85, throughput: 7 },
+        after:  { pdr: 0.96, delay: 55, energyConsumption: 50, lifetime: 70, scalability: scalabilityMap['Medium'], compEfficiency: 94, energyEfficiency: 0.96, robustness: 0.90, throughput: 8 }
+    },
+    {
+        range: [50, 150],
+        before: { pdr: 0.88, delay: 95, energyConsumption: 240, lifetime: 52, scalability: scalabilityMap['Medium'], compEfficiency: 85, energyEfficiency: 0.88, robustness: 0.78, throughput: 7.5 },
+        after:  { pdr: 0.93, delay: 80, energyConsumption: 210, lifetime: 58, scalability: scalabilityMap['High'], compEfficiency: 90, energyEfficiency: 0.93, robustness: 0.85, throughput: 9 }
+    },
+    {
+        range: [150, 250],
+        before: { pdr: 0.85, delay: 120, energyConsumption: 480, lifetime: 46, scalability: scalabilityMap['Medium'], compEfficiency: 83, energyEfficiency: 0.85, robustness: 0.75, throughput: 8 },
+        after:  { pdr: 0.91, delay: 95, energyConsumption: 420, lifetime: 53, scalability: scalabilityMap['High'], compEfficiency: 89, energyEfficiency: 0.91, robustness: 0.83, throughput: 9.5 }
+    },
+    {
+        range: [250, 350],
+        before: { pdr: 0.82, delay: 150, energyConsumption: 720, lifetime: 42, scalability: scalabilityMap['Medium-High'], compEfficiency: 80, energyEfficiency: 0.82, robustness: 0.70, throughput: 7.5 },
+        after:  { pdr: 0.88, delay: 120, energyConsumption: 650, lifetime: 50, scalability: scalabilityMap['High'], compEfficiency: 87, energyEfficiency: 0.88, robustness: 0.80, throughput: 9 }
+    },
+    {
+        range: [350, 450], // Max nodes is 450
+        before: { pdr: 0.80, delay: 180, energyConsumption: 1100, lifetime: 36, scalability: scalabilityMap['Medium'], compEfficiency: 75, energyEfficiency: 0.80, robustness: 0.65, throughput: 9 },
+        after:  { pdr: 0.87, delay: 140, energyConsumption: 950, lifetime: 45, scalability: scalabilityMap['High'], compEfficiency: 85, energyEfficiency: 0.87, robustness: 0.78, throughput: 11 }
+    }
+];
 
-const dataPoints = Object.keys(performanceData).map(Number).sort((a, b) => a - b);
 const AVERAGE_NODE_ENERGY_JOULES = 1000;
 
 // This is a simplified analysis service for demonstration purposes.
@@ -97,65 +117,16 @@ class NetworkAnalysisService {
 
     const nodeDegrees = new Map<string, number>();
     nodes.forEach(n => nodeDegrees.set(n.id, adjacency[n.id]?.length || 0));
-
-    // --- 1. Check for Cluster topology based on explicit cluster heads ---
-    if (clusterHeadIds.length > 0) {
-        const clusterHeads = nodes.filter(n => clusterHeadIds.includes(n.id));
-        if (clusterHeads.length > 0) {
-            // Check if non-head nodes are primarily connected to heads
-            const endNodes = nodes.filter(n => !clusterHeadIds.includes(n.id) && n.type !== NetworkComponentType.BASE_STATION);
-            let clusterConnections = 0;
-            endNodes.forEach(en => {
-                const neighbors = adjacency[en.id] || [];
-                if (neighbors.some(neighborId => clusterHeadIds.includes(neighborId))) {
-                    clusterConnections++;
-                }
-            });
-
-            // If a significant number of end nodes connect to heads, it's a cluster.
-            if (endNodes.length > 0 && clusterConnections / endNodes.length > 0.5) {
-                // Check for mesh-like connections within clusters or between heads
-                const avgHeadDegree = clusterHeads.reduce((sum, h) => sum + (nodeDegrees.get(h.id) || 0), 0) / clusterHeads.length;
-                if (avgHeadDegree > clusterHeads.length) { // A heuristic
-                     return 'Cluster Mesh Topology';
-                }
-                return 'Cluster Topology';
-            }
-        }
-    }
-    
-    // --- 2. Check for strict, degree-based topologies ---
     const degrees = Array.from(nodeDegrees.values());
-    const centralNode = nodes.find(n => (nodeDegrees.get(n.id) || 0) >= nodeCount - 2);
-    // Star: one central node connected to almost all others
-    if (centralNode && (centralNode.type === NetworkComponentType.BASE_STATION || centralNode.type === NetworkComponentType.SWITCH)) {
-        return 'Star Topology';
-    }
-
-    // Ring: all nodes have degree 2
-    if (degrees.every(d => d === 2)) {
-        return 'Ring Topology';
-    }
-
-    // Bus: two nodes with degree 1, rest with degree 2
-    const degreeOneCount = degrees.filter(d => d === 1).length;
-    const degreeTwoCount = degrees.filter(d => d === 2).length;
-    if (degreeOneCount === 2 && degreeTwoCount === nodeCount - 2) {
-        return 'Bus Topology';
-    }
-    
-    // --- 3. Differentiate between Mesh and other topologies ---
     const avgDegree = degrees.reduce((a, b) => a + b, 0) / nodeCount;
     const components = this.findNetworkComponents(nodes, connections);
 
-    // Mesh: highly connected, robust (often one single component)
-    if (components.length <= 2 && avgDegree > 2.5) { // Allow for a single isolated node
-        // Check for grid-like spatial distribution
+    // --- 1. Priority check for high-connectivity topologies (Mesh/Grid) ---
+    if (components.length <= 2 && avgDegree > 2.5) {
         const nodePositions = nodes.map(n => ({x: n.x, y: n.y}));
         const xCoords = [...new Set(nodePositions.map(p => p.x))].sort((a,b) => a - b);
         const yCoords = [...new Set(nodePositions.map(p => p.y))].sort((a,b) => a - b);
         
-        // A simple heuristic for grid: if nodes align well on X/Y coordinates
         if (xCoords.length > 2 && yCoords.length > 2) {
             const xGaps = xCoords.slice(1).map((x, i) => x - xCoords[i]);
             const yGaps = yCoords.slice(1).map((y, i) => y - yCoords[i]);
@@ -168,15 +139,40 @@ class NetworkAnalysisService {
                 return 'Grid Topology';
             }
         }
-
         return 'Mesh Topology';
     }
 
-    // --- 4. Fallback for everything else ---
+    // --- 2. Check for explicit Cluster topology ---
+    if (clusterHeadIds.length > 0) {
+        const endNodes = nodes.filter(n => !clusterHeadIds.includes(n.id) && n.type !== NetworkComponentType.BASE_STATION);
+        let clusterConnections = 0;
+        endNodes.forEach(en => {
+            if ((adjacency[en.id] || []).some(neighborId => clusterHeadIds.includes(neighborId))) {
+                clusterConnections++;
+            }
+        });
+        if (endNodes.length > 0 && clusterConnections / endNodes.length > 0.5) {
+            return avgDegree > 3.0 ? 'Cluster Mesh Topology' : 'Cluster Topology';
+        }
+    }
+
+    // --- 3. Stricter check for Star topology ---
+    const highDegreeNodesCount = degrees.filter(d => d >= nodeCount - 3).length;
+    const lowDegreeNodesCount = degrees.filter(d => d === 1).length;
+    if (highDegreeNodesCount === 1 && lowDegreeNodesCount >= nodeCount - 2) {
+        return 'Star Topology';
+    }
+
+    // --- 4. Check for degree-based topologies ---
+    if (degrees.every(d => d === 2)) return 'Ring Topology';
+    if (degrees.filter(d => d === 1).length === 2 && degrees.filter(d => d === 2).length === nodeCount - 2) {
+        return 'Bus Topology';
+    }
+    
+    // --- 5. Fallback ---
     if (components.length > 2) {
         return `Hybrid Topology (${components.length} disconnected components)`;
     }
-
     return 'Hybrid Topology';
   }
 
@@ -221,6 +217,53 @@ class NetworkAnalysisService {
     return components;
   }
 
+  public getParameterInfoText(parameter: keyof SimulationParameters): { definition: string, interpretation: string, comparison: string } {
+    switch(parameter) {
+        case 'Packet Delivery Ratio':
+            return {
+                definition: "Packet Delivery Ratio (PDR) is the ratio of data packets successfully delivered to a destination compared to the number of packets sent by the source. It is a fundamental measure of network reliability.",
+                interpretation: "The graph shows how PDR changes as the network size increases. A higher, flatter line indicates a more reliable protocol that maintains performance under scale. The current network's PDR is marked on the graph for both protocols, showing their relative reliability for this specific topology.",
+                comparison: "The AI-based algorithm consistently maintains a higher PDR. Its reinforcement learning model adapts to network changes, finding more stable routes and avoiding congested or failing nodes. Traditional protocols, often choosing the shortest path, are more susceptible to link breakages, resulting in higher packet loss, especially in larger or more dynamic networks."
+            };
+        case 'Throughput (Mbps)':
+            return {
+                definition: "Throughput measures the rate of successful data transmission through a network, typically in Megabits per second (Mbps). It reflects the actual bandwidth available to the application.",
+                interpretation: "This graph illustrates the network's capacity to handle data traffic as it grows. A higher throughput value indicates better efficiency. The position of the current network's performance shows how its current configuration impacts data rate compared to a scaled scenario.",
+                comparison: "The AI-based protocol achieves higher throughput by intelligently balancing loads and selecting routes with greater available capacity, avoiding the bottlenecks that can form in traditional shortest-path routing. This leads to more efficient use of the network's resources and better performance for data-intensive applications."
+            };
+        case 'End-to-end Delay (ms)':
+            return {
+                definition: "End-to-end Delay (or latency) is the time it takes for a packet to travel from its source to its destination across the network, measured in milliseconds (ms). It includes transmission, propagation, and queuing delays.",
+                interpretation: "Lower delay is critical for real-time applications. This graph shows that as the network grows, delay tends to increase. The AI protocol's ability to manage congestion helps keep this increase in check. The current network's delay is highlighted.",
+                comparison: "The AI model significantly reduces delay by learning to avoid congested nodes and inefficient paths. While traditional protocols might select a path with fewer hops, the AI considers the actual transit time, resulting in faster and more predictable delivery times."
+            };
+        case 'Energy Consumption (J)':
+            return {
+                definition: "Energy Consumption measures the total energy, in Joules (J), used by all nodes in the network to transmit, receive, and process data over a period. It is a critical metric for battery-powered ad hoc networks.",
+                interpretation: "This graph demonstrates the energy efficiency of the protocols under scale. Lower consumption is vital for extending the operational life of the network. The current network's energy footprint is shown, providing a baseline for optimization.",
+                comparison: "The AI's routing algorithm is designed for energy conservation. It prioritizes routes that use energy-efficient nodes and avoids over-utilizing specific nodes, leading to balanced energy drain and significantly lower overall consumption compared to energy-agnostic traditional protocols."
+            };
+        case 'Network Lifetime (hours)':
+            return {
+                definition: "Network Lifetime is the estimated time, in hours, until the first essential node in the network depletes its energy and fails. It is a key indicator of the network's long-term sustainability.",
+                interpretation: "A longer network lifetime is crucial for long-term deployments. The graph shows that the AI protocol's energy-aware routing results in a much slower decline in lifetime as the network scales. The current network's projected lifetime highlights the benefit of the advanced protocol.",
+                comparison: "By intelligently distributing the routing load and minimizing unnecessary transmissions, the AI-based protocol prevents premature node failure. This load-balancing strategy ensures that no single node becomes a 'hotspot' of activity, dramatically extending the operational life of the entire network compared to traditional methods."
+            };
+        case 'Robustness Index':
+            return {
+                definition: "The Robustness Index is a measure of a network's ability to maintain connectivity and performance in the face of node failures or link degradation. A higher index indicates greater resilience.",
+                interpretation: "This graph shows the protocol's ability to withstand network disruptions as the number of nodes increases. The AI protocol's high and stable robustness index indicates its superior adaptability. The current network's robustness score reflects its resilience to potential failures.",
+                comparison: "The AI-based protocol is proactive; it continuously monitors link quality and can predict potential failures, allowing it to reroute traffic before a link breaks. Traditional protocols are reactive, only seeking new routes after a failure has occurred, which leads to packet loss and lower robustness."
+            };
+        default:
+            return {
+                definition: "No definition available for this parameter.",
+                interpretation: "No interpretation available for this parameter.",
+                comparison: "No comparison available for this parameter."
+            };
+    }
+  }
+
   public simulatePerformance(
     topology: string,
     nodes: Node[],
@@ -229,9 +272,8 @@ class NetworkAnalysisService {
     state: PerformanceState = 'before'
   ): { 'AI-Based': SimulationParameters; 'Traditional': SimulationParameters } {
     const nodeCount = nodes.length;
-    const aiBased = {} as SimulationParameters;
-    
-    if (nodeCount < 2) {
+
+    if (nodeCount === 0) { // Handle case with 0 or 1 node
         const emptyParams: SimulationParameters = {
             'Packet Delivery Ratio': 0, 'End-to-end Delay (ms)': 0, 'Energy Consumption (J)': 0,
             'Network Lifetime (hours)': 0, 'Sustained Operations (cycles)': 0, 'Scalability Index': 0,
@@ -240,102 +282,109 @@ class NetworkAnalysisService {
         return { 'AI-Based': emptyParams, 'Traditional': emptyParams };
     }
     
-    let lowerBound = dataPoints[0];
-    let upperBound = dataPoints[dataPoints.length - 1];
+    // --- New logic using interpolation from the performance tiers table ---
+    const getInterpolatedSet = (protocol: 'AI-Based' | 'Traditional'): PerformanceSet => {
+        // Find the tiers to interpolate between
+        let lowerTier = performanceTiers[0];
+        let upperTier = performanceTiers[0];
 
-    for (let i = 0; i < dataPoints.length - 1; i++) {
-        if (nodeCount >= dataPoints[i] && nodeCount <= dataPoints[i + 1]) {
-            lowerBound = dataPoints[i];
-            upperBound = dataPoints[i + 1];
-            break;
-        }
-    }
-    if (nodeCount > dataPoints[dataPoints.length - 1]) {
-        lowerBound = dataPoints[dataPoints.length - 2];
-        upperBound = dataPoints[dataPoints.length - 1];
-    }
-    
-    const lowerData = performanceData[lowerBound][state];
-    const upperData = performanceData[upperBound][state];
-
-    const progress = (nodeCount - lowerBound) / (upperBound - lowerBound);
-
-    const interpolate = (key: string) => {
-        let lowerVal = lowerData[key];
-        let upperVal = upperData[key];
-
-        if (key === 'Scalability') {
-            lowerVal = scalabilityMap[lowerVal] || 0;
-            upperVal = scalabilityMap[upperVal] || 0;
+        for (let i = 0; i < performanceTiers.length; i++) {
+            const currentTier = performanceTiers[i];
+            if (nodeCount <= currentTier.range[1]) {
+                upperTier = currentTier;
+                lowerTier = i > 0 ? performanceTiers[i - 1] : currentTier;
+                break;
+            }
+            if (i === performanceTiers.length - 1) {
+                lowerTier = upperTier = currentTier;
+            }
         }
         
-        return lowerVal + (upperVal - lowerVal) * progress;
-    };
+        const lowerSet = protocol === 'AI-Based' ? lowerTier.after : lowerTier.before;
+        const upperSet = protocol === 'AI-Based' ? upperTier.after : upperTier.before;
+        const lowerBound = lowerTier.range[1];
+        const upperBound = upperTier.range[1];
 
-    aiBased['Packet Delivery Ratio'] = interpolate('Packet Delivery Ratio');
-    aiBased['End-to-end Delay (ms)'] = interpolate('End-to-End Delay (ms)');
-    aiBased['Energy Consumption (J)'] = interpolate('Energy Consumption (J)');
-    aiBased['Network Lifetime (hours)'] = interpolate('Network Lifetime (hours)');
-    aiBased['Scalability Index'] = interpolate('Scalability');
-    aiBased['Computational Efficiency (%)'] = interpolate('Computational Efficiency (%)');
-    aiBased['Energy Efficiency'] = interpolate('Energy Efficiency');
-    aiBased['Robustness Index'] = interpolate('Robustness Index');
-    aiBased['Throughput (Mbps)'] = interpolate('Throughput (Mbps)');
+        if (lowerBound === upperBound || nodeCount <= performanceTiers[0].range[1]) {
+            return protocol === 'AI-Based' ? upperTier.after : upperTier.before;
+        }
 
-    // Calculate Sustained Operations
-    const endNodesCount = nodes.filter(n => n.type === NetworkComponentType.NODE).length || 1;
-    const totalNetworkEnergy = endNodesCount * AVERAGE_NODE_ENERGY_JOULES;
+        const range = upperBound - lowerBound;
+        const factor = range > 0 ? (nodeCount - lowerBound) / range : 0;
+
+        const interpolated: Partial<PerformanceSet> = {};
+        for (const key in lowerSet) {
+            const k = key as keyof PerformanceSet;
+            const lowerVal = lowerSet[k];
+            const upperVal = upperSet[k];
+            interpolated[k] = lowerVal + (upperVal - lowerVal) * factor;
+        }
+        return interpolated as PerformanceSet;
+    }
+
+    const mapSetToParams = (set: PerformanceSet): Partial<SimulationParameters> => ({
+        'Packet Delivery Ratio': set.pdr,
+        'End-to-end Delay (ms)': set.delay,
+        'Energy Consumption (J)': set.energyConsumption,
+        'Network Lifetime (hours)': set.lifetime,
+        'Scalability Index': set.scalability,
+        'Computational Efficiency (%)': set.compEfficiency,
+        'Energy Efficiency': set.energyEfficiency,
+        'Robustness Index': set.robustness,
+        'Throughput (Mbps)': set.throughput,
+    });
     
-    aiBased['Sustained Operations (cycles)'] = aiBased['Energy Consumption (J)'] > 0
-        ? totalNetworkEnergy / aiBased['Energy Consumption (J)']
-        : Infinity;
+    // "AI-Based" protocol always uses the optimized 'after' values.
+    // "Traditional" protocol always uses the standard 'before' values.
+    let aiBased: Partial<SimulationParameters> = mapSetToParams(getInterpolatedSet('AI-Based'));
+    let traditional: Partial<SimulationParameters> = mapSetToParams(getInterpolatedSet('Traditional'));
 
-    const traditional = { ...aiBased };
-    traditional['Packet Delivery Ratio'] *= 0.92;
-    traditional['End-to-end Delay (ms)'] *= 1.25;
-    traditional['Energy Consumption (J)'] *= 1.18;
-    traditional['Network Lifetime (hours)'] *= 0.85;
-    traditional['Scalability Index'] *= 0.9;
-    traditional['Computational Efficiency (%)'] *= 0.95;
-    traditional['Energy Efficiency'] *= 0.93;
-    traditional['Robustness Index'] *= 0.88;
-    traditional['Throughput (Mbps)'] *= 0.8;
-    traditional['Sustained Operations (cycles)'] = traditional['Energy Consumption (J)'] > 0
-        ? totalNetworkEnergy / traditional['Energy Consumption (J)']
-        : Infinity;
-
-
-    // Apply malicious node penalties, primarily to traditional protocol
+    // Apply Malicious Node Penalties on top of the baseline values
     if (maliciousNodeIds.length > 0) {
         const attackSeverity = 1 + maliciousNodeIds.length / nodes.length * 5;
-        traditional['Packet Delivery Ratio'] *= (0.3 / attackSeverity);
-        traditional['End-to-end Delay (ms)'] *= (1.5 * attackSeverity);
-        traditional['Robustness Index'] *= 0.2;
-        traditional['Network Lifetime (hours)'] *= 0.5;
-        traditional['Sustained Operations (cycles)'] *= 0.4;
-        traditional['Throughput (Mbps)'] *= (0.1 / attackSeverity);
-        // AI model is resilient, but still takes a small hit
-        aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 0.95);
-        aiBased['Packet Delivery Ratio'] *= 0.98;
+        traditional['Packet Delivery Ratio']! *= (0.3 / attackSeverity);
+        traditional['End-to-end Delay (ms)']! *= (1.5 * attackSeverity);
+        traditional['Robustness Index']! *= 0.2;
+        traditional['Throughput (Mbps)']! *= (0.1 / attackSeverity);
+        // AI model is resilient but takes a small hit
+        aiBased['Robustness Index']! *= 0.95;
+        aiBased['Packet Delivery Ratio']! *= 0.98;
     }
-    
-    // Final cleanup: Clamp percentage-based values and round numbers
-    Object.keys(aiBased).forEach(key => {
-        const paramKey = key as keyof SimulationParameters;
-        
-        if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index'].includes(key)) {
-            aiBased[paramKey] = Math.max(0.40, Math.min(0.99, aiBased[paramKey]));
-            const tradUpperCap = Math.min(0.95, aiBased[paramKey] - 0.05);
-            traditional[paramKey] = Math.max(0.35, Math.min(tradUpperCap, traditional[paramKey]));
-        } else {
-             aiBased[paramKey] = Math.round(aiBased[paramKey]);
-             traditional[paramKey] = Math.round(traditional[paramKey]);
-        }
-    });
 
+    // Finalize parameters (rounding, clamping, calculating derived values)
+    const endNodesCount = nodes.filter(n => n.type === NetworkComponentType.NODE).length || 1;
+    const totalNetworkEnergy = endNodesCount * AVERAGE_NODE_ENERGY_JOULES;
+
+    const finalizeParams = (params: Partial<SimulationParameters>): SimulationParameters => {
+        if (params['Energy Consumption (J)']! > 0) {
+             params['Sustained Operations (cycles)'] = totalNetworkEnergy / params['Energy Consumption (J)']!;
+        } else {
+             params['Sustained Operations (cycles)'] = Infinity;
+        }
+
+        const final = { ...params } as SimulationParameters;
+        Object.keys(final).forEach(key => {
+            const k = key as keyof SimulationParameters;
+            if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index'].includes(k)) {
+                final[k] = parseFloat(Math.max(0.1, Math.min(0.99, final[k])).toPrecision(3));
+            } else if (k === 'Computational Efficiency (%)') {
+                 final[k] = Math.max(50, Math.min(99, Math.round(final[k])));
+            } else {
+                final[k] = parseFloat(Math.max(0, final[k]).toPrecision(3));
+            }
+        });
+        
+        final['Network Lifetime (hours)'] = Math.round(params['Network Lifetime (hours)']!);
+        final['Sustained Operations (cycles)'] = Math.round(params['Sustained Operations (cycles)']!);
+        final['Energy Consumption (J)'] = Math.round(params['Energy Consumption (J)']!);
+        final['End-to-end Delay (ms)'] = Math.round(params['End-to-end Delay (ms)']!);
+        
+        return final;
+    };
+    
     return {
-      'AI-Based': aiBased,
-      'Traditional': traditional,
+      'AI-Based': finalizeParams(aiBased),
+      'Traditional': finalizeParams(traditional),
     };
   }
 }

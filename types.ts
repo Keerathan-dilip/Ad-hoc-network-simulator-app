@@ -1,4 +1,3 @@
-
 export enum Workspace {
   CODE = 'CODE',
   VISUAL = 'VISUAL',
@@ -24,6 +23,11 @@ export interface Node {
   energyEfficiency: number; // Represents health/battery for mobile nodes
   energySpent: number; // Consumption rate
   isMalicious?: boolean;
+  sensorData?: {
+    temperature: number;
+    humidity: number;
+    signalInterference: number;
+  };
   // Optional, type-specific properties
   packetForwardingCapacity?: number; // For ROUTER (packets/sec)
   portCount?: number; // For SWITCH
@@ -48,6 +52,8 @@ export interface AnimatedPacket {
   isAttackPacket?: boolean;
 }
 
+export type SensorEventType = 'heat' | 'humidity' | 'flood' | 'interference' | 'reset';
+
 export interface DeliveredPacketInfo {
   id: string;
   from: string;
@@ -58,8 +64,8 @@ export interface DeliveredPacketInfo {
   transmissionTime: number; // in milliseconds
 }
 
+// FIX: Removed index signature `[key: string]: number;` which caused `keyof SimulationParameters` to be `string | number`.
 export interface SimulationParameters {
-  [key: string]: number;
   'Packet Delivery Ratio': number;
   'End-to-end Delay (ms)': number;
   'Energy Consumption (J)': number;

@@ -4,8 +4,10 @@ import {
     PieChart, Pie, Cell,
     LineChart, Line
 } from 'recharts';
-import { Node, SimulationParameters, NetworkComponentType } from '../types';
+import { Node, SimulationParameters, NetworkComponentType, SensorEventType } from '../types';
 import IPConfigurationPanel from './IPConfigurationPanel';
+import SensorDataTable from './SensorDataTable';
+import LiveSensorControl from './LiveSensorControl';
 
 interface ReportDashboardProps {
   simulationData: {
@@ -17,6 +19,7 @@ interface ReportDashboardProps {
   onReconstruct: () => void;
   onUpdateNodeIp: (nodeId: string, ipAddress: string) => void;
   isUpdating: boolean;
+  onSimulateSensorEvent: (eventType: SensorEventType) => void;
 }
 
 type ChartType = 'pie' | 'line' | 'stat' | 'progress' | 'bar' | 'stat_combined';
@@ -202,7 +205,6 @@ const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) 
     }
 };
 
-// FIX: Update domain type to allow string values like 'auto' for recharts domain prop.
 const LiveChart: React.FC<{ data: LiveDataPoint[]; title: string; unit: string; dataKeyAI: keyof LiveDataPoint; dataKeyTrad: keyof LiveDataPoint; domain: [number | string, number | string] }> =
     ({ data, title, unit, dataKeyAI, dataKeyTrad, domain }) => {
     return (
@@ -226,7 +228,7 @@ const LiveChart: React.FC<{ data: LiveDataPoint[]; title: string; unit: string; 
     );
 };
 
-const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simulationData, nodes, weakNodes, onReconstruct, onUpdateNodeIp, isUpdating }, ref) => {
+const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simulationData, nodes, weakNodes, onReconstruct, onUpdateNodeIp, isUpdating, onSimulateSensorEvent }, ref) => {
   const [liveChartData, setLiveChartData] = useState<LiveDataPoint[]>([]);
 
   useEffect(() => {
@@ -290,6 +292,9 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
     };
   });
 
+  const baseAiPDR = simulationData['AI-Based']['Packet Delivery Ratio'];
+  const pdrDomain: [number | string, number | string] = [Math.max(0, Math.min(0.95, baseAiPDR - 0.2)), 1.0];
+
   return (
     <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-6 mt-4 animate-fadeIn relative">
       {isUpdating && (
@@ -334,7 +339,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
                         unit="%"
                         dataKeyAI="aiPDR"
                         dataKeyTrad="tradPDR"
-                        domain={[0.6, 1.0]}
+                        domain={pdrDomain}
                     />
                     <LiveChart
                         data={liveChartData}
@@ -409,6 +414,18 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
             </div>
         </div>
         
+        <div className="mt-8">
+            <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Environmental Sensors</h2>
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <SensorDataTable nodes={nodes} />
+                </div>
+                <div>
+                    <LiveSensorControl onSimulateEvent={onSimulateSensorEvent} disabled={nodes.length === 0} />
+                </div>
+            </div>
+        </div>
+
         <div className="mt-8">
             <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Network Configuration</h2>
             <IPConfigurationPanel nodes={nodes} onUpdateNodeIp={onUpdateNodeIp} />
