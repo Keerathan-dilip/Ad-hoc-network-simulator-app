@@ -18,6 +18,23 @@ interface HistoryPanelProps {
 }
 
 const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onRestore, onClose, onDelete }) => {
+    
+    const formatTimestamp = (timestamp: number) => {
+        const date = new Date(timestamp);
+        const formattedDate = date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+        const formattedTime = date.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+        });
+        return `${formattedDate}, ${formattedTime}`;
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex justify-end" onClick={onClose}>
             <div className="w-full max-w-md h-full bg-gray-800 shadow-2xl border-l border-cyan-500/20 flex flex-col animate-fadeIn" onClick={e => e.stopPropagation()}>
@@ -35,8 +52,11 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onRestore, onClose
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <p className="font-semibold text-white">{entry.name}</p>
-                                            <p className="text-xs text-gray-400">
-                                                {new Date(entry.timestamp).toLocaleString()} | {entry.nodes.length} nodes, {entry.connections.length} connections
+                                            <p className="text-sm text-gray-400">
+                                                {formatTimestamp(entry.timestamp)}
+                                            </p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {entry.nodes.length} nodes, {entry.connections.length} connections
                                             </p>
                                         </div>
                                         <div className="flex items-center space-x-2">

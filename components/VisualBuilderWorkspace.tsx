@@ -12,6 +12,10 @@ import { pathfindingService } from '../services/pathfindingService';
 import AIInsightsPanel from './AIInsightsPanel';
 import PacketDeliveryLog from './PacketDeliveryLog';
 import { networkGenerationService } from '../services/networkGenerationService';
+import SensorDataTable from './SensorDataTable';
+import LiveSensorControl from './LiveSensorControl';
+import LiveMonitoringCharts from './LiveMonitoringCharts';
+import NetworkManagementPanel from './NetworkManagementPanel';
 
 const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
 const PACKET_ANIMATION_DURATION_AI = 4000; // ms
@@ -134,6 +138,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [networkDataToSave, setNetworkDataToSave] = useState('');
   const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const [activeInfoTab, setActiveInfoTab] = useState<'performance' | 'environment'>('performance');
+
 
   useEffect(() => {
     if (canvasViewportRef.current) {
@@ -852,151 +858,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             document.body.removeChild(chartContainer);
             return canvas;
         };
-        
-        const getParameterInfo = (parameter: keyof SimulationParameters, currentNodes: Node[]) => {
-            const aiValue = simulationParams['AI-Based'][parameter];
-            const tradValue = simulationParams['Traditional'][parameter];
-            const makeBreakdown = (isEnhanced: boolean) => {
-                switch(parameter) {
-                    case 'Packet Delivery Ratio':
-                        return isEnhanced ? {
-                            title: "Enhanced AI Algorithm Logic (Reinforcement Learning)",
-                            description: "The AI model learns the most reliable routes by rewarding successful packet deliveries. It uses a Q-learning approach to assign a 'quality' value to routing decisions, prioritizing paths with a higher historical success rate.",
-                            formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                            headers: ['Component', 'Description'],
-                            data: [
-                                ["Q(s,a)", "The 'Quality' of forwarding a packet from node 's' to neighbor 'a'"],
-                                ['R (Reward)', 'A positive reward (e.g., +1) is given if the packet is acknowledged, incentivizing reliable paths.'],
-                            ]
-                        } : {
-                            title: "Traditional Algorithm Logic (e.g., AODV)",
-                            description: "Traditional protocols like AODV select the shortest path, which might not be the most stable, leading to packet loss if a link breaks.",
-                            formula: "PDR = (Total Packets Received / Total Packets Sent)",
-                            headers: ['Component', 'Description', 'Example Value'],
-                            data: [
-                                ['Packets Sent', 'Total data packets initiated.', '1000 packets'],
-                                ['Packets Received', `Packets successfully reaching the destination.`, `${Math.round(tradValue * 1000)} packets`],
-                                ['Calculation', `(${Math.round(tradValue * 1000)} / 1000)`, `${tradValue}`],
-                            ]
-                        };
-                    case 'Throughput (Mbps)':
-                        return isEnhanced ? {
-                             title: "Enhanced AI Algorithm Logic (Reinforcement Learning)",
-                            description: "The AI model optimizes for throughput by learning which routes have higher available bandwidth and lower congestion, rewarding faster data transmission.",
-                            formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                            headers: ['Component', 'Description'],
-                            data: [
-                                ["Q(s,a)", "The 'Quality' of choosing a path based on its potential data rate."],
-                                ['R (Reward)', 'Reward is proportional to the throughput achieved on the chosen path, encouraging high-capacity routes.'],
-                            ]
-                        } : {
-                             title: "Traditional Algorithm Logic (e.g., DSR)",
-                            description: "Traditional methods do not actively manage for bandwidth, leading to congestion on shortest paths and lower overall throughput.",
-                            formula: "Throughput = (Total Data Received (bits) / Time)",
-                            headers: ['Component', 'Description', 'Example Value'],
-                            data: [
-                                ['Data Received', 'Sum of sizes of all delivered packets.', `${(tradValue * 10 * 1000000).toExponential(2)} bits`],
-                                ['Time', 'The simulation measurement period.', '10 seconds'],
-                                ['Calculation', `${(tradValue * 10 * 1000000).toExponential(2)} / 10`, `${tradValue} Mbps`],
-                            ]
-                        };
-                     case 'End-to-end Delay (ms)':
-                        return isEnhanced ? {
-                            title: "Enhanced AI Algorithm Logic (Reinforcement Learning)",
-                            description: "The AI model minimizes delay by learning to avoid congested nodes and low-quality links. The reward function penalizes longer transit times.",
-                            formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                            headers: ['Component', 'Description'],
-                            data: [
-                                ["Q(s,a)", "The 'Quality' of a route based on its expected speed."],
-                                ['R (Reward)', 'The reward is inversely proportional to the measured delay (e.g., R = 1 / delay), penalizing slow paths.'],
-                            ]
-                        } : {
-                             title: "Traditional Algorithm Logic (e.g., AODV)",
-                            description: "Choosing the shortest path in hops can lead to queuing delays at busy nodes, increasing the overall end-to-end delay.",
-                            formula: "Avg. Delay = Σ (Packet Rx Time - Packet Tx Time) / Total Packets Received",
-                             headers: ['Component', 'Description', 'Example Value'],
-                             data: [
-                                 ['Σ (Packet Rx - Tx)', 'The sum of transit times for all successful packets.', `${(tradValue * 985).toLocaleString()} ms`],
-                                 ['Packets Received', 'Total successful packets.', '985 packets'],
-                                 ['Calculation', `${(tradValue * 985).toLocaleString()} / 985`, `${tradValue} ms`],
-                             ]
-                        };
-                     case 'Energy Consumption (J)':
-                        return isEnhanced ? {
-                             title: "Enhanced AI Algorithm Logic (Reinforcement Learning)",
-                            description: "The AI model is explicitly trained to conserve energy. The reward function penalizes routes that use nodes with low battery or require high transmission power.",
-                            formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                            headers: ['Component', 'Description'],
-                            data: [
-                                ["Q(s,a)", "The 'Quality' of a route based on its energy cost."],
-                                ['R (Reward)', 'The reward is inversely proportional to the energy consumed (e.g., R = 1 / energy_cost), favoring efficient paths.'],
-                            ]
-                        } : {
-                             title: "Traditional Algorithm Logic",
-                            description: "Traditional protocols are generally not energy-aware. Consumption is a direct result of the total number of transmissions required.",
-                            formula: "Total Consumption = Σ (Energy Spent by each node)",
-                              headers: ["Component", "Description", "Example Value"],
-                              data: [
-                                  ['Avg. Energy Spent', 'Energy used by a single node for all operations.', `${(tradValue / currentNodes.length).toFixed(2)} J per node`],
-                                  ['Number of Nodes', 'Total active nodes in the network.', `${currentNodes.length} nodes`],
-                                  ['Calculation', `${(tradValue / currentNodes.length).toFixed(2)} * ${currentNodes.length}`, `${tradValue} J`],
-                              ]
-                        };
-                     case 'Network Lifetime (hours)':
-                        return isEnhanced ? {
-                             title: "Enhanced AI Algorithm Logic (Load Balancing)",
-                            description: "The AI extends network lifetime by intelligently distributing routing tasks across the network, preventing any single node's battery from draining prematurely. The reward function considers the remaining energy of nodes in a path.",
-                             formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                            headers: ['Component', 'Description'],
-                            data: [
-                                ["Q(s,a)", "The 'Quality' of a route, factoring in long-term network survival."],
-                                ['R (Reward)', 'Reward is higher for routes that use nodes with high remaining energy, ensuring balanced energy drain.'],
-                            ]
-                        } : {
-                             title: "Traditional Algorithm Logic",
-                            description: "Traditional protocols often create 'hotspots' by overusing centrally-located nodes for routing, leading to their rapid failure and network fragmentation.",
-                            formula: "Lifetime = (Total Initial Energy / Total Consumption Rate)",
-                            headers: ["Component", "Description", "Example Value"],
-                            data: [
-                                ['Total Initial Energy', 'Sum of battery capacity of all mobile nodes.', `${nodes.filter(n=>n.type === 'NODE').length * 1000} J`],
-                                ['Consumption Rate', 'Simulated energy consumed per hour.', `${(simulationParams['Traditional']['Energy Consumption (J)'] * 5).toFixed(0)} J/hour`],
-                                ['Calculation', `(${nodes.filter(n=>n.type === 'NODE').length * 1000}) / ${(simulationParams['Traditional']['Energy Consumption (J)'] * 5).toFixed(0)}`, `${tradValue.toFixed(1)} hours`],
-                            ]
-                        };
-                    case 'Robustness Index':
-                         return isEnhanced ? {
-                             title: "Enhanced AI Algorithm Logic (Proactive Rerouting)",
-                             description: "The AI model improves robustness by monitoring link quality in real-time. It can predict link failures before they happen and proactively reroute traffic, minimizing disruption.",
-                             formula: "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]",
-                             headers: ['Component', 'Description'],
-                             data: [
-                                 ["Q(s,a)", "The 'Quality' of a route, factoring in link stability metrics."],
-                                 ['R (Reward)', 'Reward is higher for stable, high-quality links and lower for links showing signs of degradation.'],
-                             ]
-                         } : {
-                             title: "Traditional Algorithm Logic (Reactive Rerouting)",
-                             description: "Traditional protocols are reactive. They only begin searching for a new path after a link has already failed, resulting in packet loss and significant recovery time.",
-                             formula: "Robustness = 1 - (Impact of Failure / Network Size)",
-                             headers: ["Component", "Description", "Example Value"],
-                             data: [
-                                 ['Impact of Failure', 'A simulated score for performance degradation when nodes fail.', `${((1 - tradValue) * currentNodes.length).toFixed(1)}`],
-                                 ['Network Size', 'The total number of nodes.', `${currentNodes.length}`],
-                                 ['Calculation', `1 - (${((1 - tradValue) * currentNodes.length).toFixed(1)} / ${currentNodes.length})`, `${tradValue.toFixed(2)}`],
-                             ]
-                         };
-                    default: return null;
-                }
-            };
-
-            return {
-                definition: 'This is a placeholder definition.', // This will be populated by the main function call logic
-                formulaInfo: {
-                    breakdowns: [makeBreakdown(false), makeBreakdown(true)].filter(Boolean) as any[]
-                },
-                interpretation: 'This is a placeholder interpretation.',
-                comparison: 'This is a placeholder comparison.'
-            };
-        };
 
         // --- RENDER PDF CONTENT ---
         renderTitlePage();
@@ -1036,12 +897,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const parametersToDetail: (keyof SimulationParameters)[] = ['Packet Delivery Ratio', 'Throughput (Mbps)', 'End-to-end Delay (ms)', 'Energy Consumption (J)', 'Network Lifetime (hours)', 'Robustness Index'];
         
         let sectionCounter = 3;
-        for (const param of parametersToDetail) {
+        for (const [index, param] of parametersToDetail.entries()) {
             yPos = renderSectionTitle(`${sectionCounter}. Detailed Analysis: ${param}`, margin, true);
-            const info = getParameterInfo(param, nodes); // This gets the generic template
-            
-            // This is the actual text content from the original function.
-            const { definition, interpretation, comparison } = networkAnalysisService.getParameterInfoText(param);
+            const info = networkAnalysisService.getParameterInfoText(param);
 
             const graphCanvas = await generateAndRenderGraph(param);
             const graphHeight = contentWidth * (graphCanvas.height / graphCanvas.width);
@@ -1059,7 +917,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             yPos += 5;
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(10);
-            yPos = renderText(interpretation, margin, yPos, {});
+            yPos = renderText(info.interpretation, margin, yPos, {});
             yPos += 15;
 
             yPos = addPageBreaks(yPos);
@@ -1069,7 +927,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             yPos += 5;
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(10);
-            yPos = renderText(comparison, margin, yPos, {});
+            yPos = renderText(info.comparison, margin, yPos, {});
             yPos += 15;
 
             yPos = addPageBreaks(yPos);
@@ -1079,7 +937,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             yPos += 5;
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(10);
-            yPos = renderText(definition, margin, yPos, {});
+            yPos = renderText(info.definition, margin, yPos, {});
             yPos += 10;
 
             if (info.formulaInfo && info.formulaInfo.breakdowns) {
@@ -1103,7 +961,21 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                     yPos += 15;
                 }
             }
+            
             sectionCounter++;
+
+            // Add bridging text
+            const nextParam = parametersToDetail[index + 1];
+            if (nextParam) {
+                yPos = addPageBreaks(yPos + 10);
+                pdf.setFont('helvetica', 'italic');
+                pdf.setFontSize(9);
+                pdf.setTextColor(150, 150, 150);
+                const bridgeText = networkAnalysisService.getBridgingText(param, nextParam);
+                yPos = renderText(bridgeText, margin, yPos, { maxWidth: contentWidth });
+                yPos += 15;
+                pdf.setTextColor(0, 0, 0);
+            }
         }
 
         pdf.save("full_network_report.pdf");
@@ -1118,9 +990,52 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
 
 
   const handleDownloadParameterGraph = async (parameter: keyof SimulationParameters) => {
+    if (!simulationParams) {
+        alert("Please run an analysis first to generate data.");
+        return;
+    }
     setIsDownloadingReport(true);
     try {
         const { createRoot } = await import('react-dom/client');
+        const { default: html2canvas } = await import('html2canvas');
+        const { default: jsPDF } = await import('jspdf');
+
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 40;
+        const contentWidth = pdfWidth - margin * 2;
+        let yPos = margin;
+
+        const addPageBreaks = (currentY: number) => (currentY > pdfHeight - margin * 2) ? (pdf.addPage(), margin) : currentY;
+        const renderText = (text: string, x: number, y: number, options: any = {}) => {
+            const lines = pdf.splitTextToSize(text, options.maxWidth || contentWidth);
+            pdf.text(lines, x, y, options);
+            return y + (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor;
+        };
+        const renderSingleTable = (startY: number, headers: string[], data: string[][]) => {
+            let y = startY;
+            const columnWidths = headers.map(() => contentWidth / headers.length);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9);
+            pdf.setFillColor(230, 230, 230);
+            pdf.rect(margin, y - 10, contentWidth, 12, 'F');
+            pdf.setTextColor(0, 0, 0);
+            headers.forEach((header, i) => pdf.text(header, margin + 3 + (i * columnWidths[i]), y));
+            y += 5;
+            pdf.setFont('helvetica', 'normal');
+            data.forEach((row, rowIndex) => {
+                let maxRowHeight = 0;
+                row.forEach((cell, i) => maxRowHeight = Math.max(maxRowHeight, (pdf.splitTextToSize(String(cell), columnWidths[i] - 6).length * pdf.getLineHeight() * 1.15) / pdf.internal.scaleFactor));
+                y = addPageBreaks(y + maxRowHeight + 4);
+                pdf.setFillColor(rowIndex % 2 === 0 ? 255 : 245, 255, 255);
+                pdf.rect(margin, y - 10, contentWidth, maxRowHeight + 4, 'F');
+                row.forEach((cell, i) => renderText(String(cell), margin + 3 + (i * columnWidths[i]), y, { maxWidth: columnWidths[i] - 6 }));
+                y += maxRowHeight + 4;
+            });
+            return y;
+        };
+
         const chartContainer = document.createElement('div');
         chartContainer.style.position = 'absolute';
         chartContainer.style.left = '-9999px';
@@ -1138,12 +1053,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             const lower = topology.toLowerCase();
             if (lower.includes('cluster-mesh')) return 'cluster-mesh';
             if (lower.includes('cluster')) return 'cluster';
-            if (lower.includes('mesh')) return 'mesh';
-            if (lower.includes('star')) return 'star';
-            if (lower.includes('ring')) return 'ring';
-            if (lower.includes('bus')) return 'bus';
-            if (lower.includes('grid')) return 'grid';
-            return 'random'; 
+            return 'random';
         };
         const generationTopology = toGenerationTopology(currentTopology);
 
@@ -1154,15 +1064,15 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         }
         
         const ChartComponent = (
-            <div style={{width: '100%', height: '100%'}}>
-              <h2 style={{color: '#9ca3af', textAlign: 'center'}}>{parameter} vs. Number of Nodes ({currentTopology})</h2>
+            <div style={{width: '100%', height: '100%', color: '#e5e7eb', fontFamily: 'sans-serif' }}>
+              <h2 style={{color: '#e5e7eb', textAlign: 'center', fontSize: '22px', fontWeight: 'bold'}}>{String(parameter).split('(')[0].trim()} vs. Number of Nodes ({currentTopology})</h2>
               <ResponsiveContainer width="100%" height="90%">
                 <LineChart data={graphData} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis dataKey="nodes" stroke="#9ca3af" label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -5, fill: '#9ca3af' }} />
                   <YAxis stroke="#9ca3af" label={{ value: String(parameter), angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
                   <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} />
-                  <Legend />
+                  <Legend wrapperStyle={{ color: '#e5e7eb' }}/>
                   <Line type="monotone" dataKey="AI-Based" stroke="#22d3ee" strokeWidth={2} />
                   <Line type="monotone" dataKey="Traditional" stroke="#f97316" strokeWidth={2} />
                 </LineChart>
@@ -1173,22 +1083,50 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const root = createRoot(chartContainer);
         root.render(ChartComponent);
         await new Promise(resolve => setTimeout(resolve, 500));
-
-        const { default: html2canvas } = await import('html2canvas');
-        const { default: jsPDF } = await import('jspdf');
-
         const canvas = await html2canvas(chartContainer, { backgroundColor: '#111827', useCORS: true, scale: 2 });
-        const imgData = canvas.toDataURL('image/png');
-        
-        const pdf = new jsPDF('l', 'pt', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        
-        pdf.addImage(imgData, 'PNG', 40, 40, pdfWidth - 80, pdfHeight - 80);
-        pdf.save(`${String(parameter).replace(/ /g, '_')}_vs_Nodes.pdf`);
-
         root.unmount();
         document.body.removeChild(chartContainer);
+
+        // --- PDF Generation ---
+        const info = networkAnalysisService.getParameterInfoText(parameter);
+        
+        pdf.setFontSize(22);
+        pdf.text(`In-Depth Analysis: ${parameter}`, pdfWidth / 2, yPos, { align: 'center' });
+        yPos += 40;
+        
+        const graphHeight = contentWidth * (canvas.height / canvas.width);
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, graphHeight);
+        yPos += graphHeight + 20;
+
+        yPos = addPageBreaks(yPos);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        yPos = renderText('1. Definition', margin, yPos, {});
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        yPos = renderText(info.definition, margin, yPos, {});
+        yPos += 20;
+
+        for (const [index, breakdown] of info.formulaInfo.breakdowns.entries()) {
+            yPos = addPageBreaks(yPos);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(14);
+            yPos = renderText(`${index + 2}. ${breakdown.title}`, margin, yPos, {});
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            yPos = renderText(breakdown.description, margin, yPos, {});
+            if (breakdown.formula) {
+                yPos += 5;
+                pdf.setFont('courier', 'bold');
+                yPos = renderText(breakdown.formula, margin + 5, yPos, {});
+                pdf.setFont('helvetica', 'normal');
+            }
+            yPos += 8;
+            yPos = renderSingleTable(yPos, breakdown.headers, breakdown.data);
+            yPos += 15;
+        }
+
+        pdf.save(`${String(parameter).replace(/[^a-zA-Z]/g, '_')}_Analysis.pdf`);
 
     } catch (error) {
         console.error("Failed to generate parameter graph PDF:", error);
@@ -1306,37 +1244,10 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     const remainingClusterHeadIds = clusterHeadIds.filter(id => !weakNodeIds.includes(id));
     setClusterHeadIds(remainingClusterHeadIds);
     setSelectedNodeIds([]);
-    setAnalysisContent(null);
-    setIdentifiedTopology(null);
-    setAnimatedPackets([]);
     
-    alert(`Removed ${weakNodeIds.length} weaker node(s). The network has been reconnected and the report will now be updated.`);
+    alert(`Removed ${weakNodeIds.length} weaker node(s) and reconnected the network.`);
     
-    if (newNodes.length >= 2) {
-      setIsAnalyzing(true);
-      try {
-        const newTopology = networkAnalysisService.identifyTopology(newNodes, newConnections, remainingClusterHeadIds);
-        setIdentifiedTopology(newTopology);
-        const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);
-        const analysisPromise = geminiService.getStructuredAnalysis({ ...networkData, topology: newTopology });
-        
-        const params = networkAnalysisService.simulatePerformance(newTopology, newNodes, newConnections, [], 'after');
-        setSimulationParams(params);
-
-        const newAnalysis = await analysisPromise;
-        setAnalysisContent(newAnalysis);
-
-      } catch (error) {
-        console.error("Re-analysis failed after reconstruction:", error);
-        setAnalysisContent('**Error:** Could not regenerate analysis after reconstruction.');
-      } finally {
-        setIsAnalyzing(false);
-        startMobility(); // Keep the network "live" after reconstruction
-      }
-    } else {
-        clearAnalysis();
-    }
-  }, [nodes, connections, setNodes, setConnections, clearAnalysis, startMobility, saveSnapshot, clusterHeadIds, setClusterHeadIds]);
+  }, [nodes, connections, setNodes, setConnections, saveSnapshot, clusterHeadIds, setClusterHeadIds]);
   
   const handleSaveNetwork = useCallback(() => {
     if (nodes.length === 0) {
@@ -1502,6 +1413,20 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const handleZoomIn = () => setZoom(z => Math.min(MAX_ZOOM, z + ZOOM_STEP));
   const handleZoomOut = () => setZoom(z => Math.max(MIN_ZOOM, z - ZOOM_STEP));
   const handleZoomReset = () => setZoom(1);
+    
+  const TabButton = ({ isActive, onClick, children }: { isActive: boolean, onClick: () => void, children: React.ReactNode }) => (
+      <button
+        onClick={onClick}
+        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+          isActive
+            ? 'border-b-2 border-cyan-400 text-cyan-300'
+            : 'text-gray-400 hover:text-white'
+        }`}
+        aria-pressed={isActive}
+      >
+        {children}
+      </button>
+  );
 
   return (
     <>
@@ -1523,7 +1448,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   isDownloadingReport={isDownloadingReport}
                   onSaveNetwork={handleSaveNetwork}
                   onLoadNetwork={handleLoadNetwork}
-                  onDownloadParameterGraph={handleDownloadParameterGraph}
               />
               {isPacketSimulationMode && (
                   <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 animate-fadeIn">
@@ -1612,16 +1536,47 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         </div>
         {simulationParams && (
           <div className="mt-4">
-              <ReportDashboard
-                ref={reportDashboardRef}
-                simulationData={simulationParams}
-                nodes={nodes}
-                weakNodes={weakNodes}
-                onReconstruct={handleReconstruct}
-                onUpdateNodeIp={updateNodeIp}
-                isUpdating={isReportUpdating}
-                onSimulateSensorEvent={handleSensorEvent}
-              />
+              <div className="flex border-b border-cyan-500/20 mb-[-1px] pl-2">
+                  <TabButton isActive={activeInfoTab === 'performance'} onClick={() => setActiveInfoTab('performance')}>
+                      Performance Report
+                  </TabButton>
+                  <TabButton isActive={activeInfoTab === 'environment'} onClick={() => setActiveInfoTab('environment')}>
+                      Environmental Sensing
+                  </TabButton>
+              </div>
+
+              {activeInfoTab === 'performance' && (
+                  <>
+                    <ReportDashboard
+                      ref={reportDashboardRef}
+                      simulationData={simulationParams}
+                      isUpdating={isReportUpdating}
+                      onDownloadParameterGraph={handleDownloadParameterGraph}
+                    />
+                    <LiveMonitoringCharts initialData={simulationParams} />
+                    <NetworkManagementPanel
+                      nodes={nodes}
+                      onReconstruct={handleReconstruct}
+                      onUpdateNodeIp={updateNodeIp}
+                    />
+                  </>
+              )}
+              {activeInfoTab === 'environment' && (
+                <div className="bg-gray-800 rounded-lg rounded-tl-none shadow-2xl border border-cyan-500/20 p-4 animate-fadeIn">
+                    <h2 className="text-2xl font-bold text-cyan-300 mb-4">Environmental Sensing & Control</h2>
+                    <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="w-full lg:w-2/3">
+                            <SensorDataTable nodes={nodes} />
+                        </div>
+                        <div className="w-full lg:w-1/3">
+                            <LiveSensorControl
+                                onSimulateEvent={handleSensorEvent}
+                                disabled={isAnalyzing || isGeneratingNetwork}
+                            />
+                        </div>
+                    </div>
+                </div>
+              )}
           </div>
           )}
       </div>

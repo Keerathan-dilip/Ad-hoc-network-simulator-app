@@ -17,9 +17,9 @@ const IPConfigurationPanel: React.FC<IPConfigurationPanelProps> = ({ nodes, onUp
   }, [nodes, subnet, onUpdateNodeIp]);
 
   return (
-    <div className="bg-gray-800/50 p-4 rounded-lg border border-cyan-500/10 shadow-lg">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-        <h3 className="text-lg font-semibold text-cyan-200 mb-2 sm:mb-0">IP Address Configuration</h3>
+    <div className="bg-gray-900/50 p-3 rounded-lg border border-cyan-500/10 shadow-lg h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2">
+        <h3 className="text-sm font-semibold text-cyan-200 mb-2 sm:mb-0">IP Address Configuration</h3>
         <div className="flex items-center space-x-2">
             <label htmlFor="subnet-input" className="text-sm font-medium text-gray-300 shrink-0">Subnet:</label>
             <input
@@ -39,16 +39,16 @@ const IPConfigurationPanel: React.FC<IPConfigurationPanelProps> = ({ nodes, onUp
             </button>
         </div>
       </div>
-      <div className="max-h-80 overflow-y-auto">
+      <div className="flex-grow max-h-48 overflow-y-auto">
         <table className="w-full text-sm text-left text-gray-300">
           <thead className="text-xs text-cyan-300 uppercase bg-gray-700/50 sticky top-0">
             <tr>
-              <th scope="col" className="px-4 py-2">Node</th>
-              <th scope="col" className="px-4 py-2">IP Address</th>
+              <th scope="col" className="px-4 py-2">NODE</th>
+              <th scope="col" className="px-4 py-2">IP ADDRESS</th>
             </tr>
           </thead>
           <tbody>
-            {nodes.map((node, index) => (
+            {nodes.slice(0, 8).map((node, index) => ( // Show first 8 nodes like in PDF
               <tr key={node.id} className="border-b border-gray-700 hover:bg-gray-700/30">
                 <td className="px-4 py-2 font-medium">Node {index + 1}</td>
                 <td className="px-4 py-2">
@@ -62,7 +62,7 @@ const IPConfigurationPanel: React.FC<IPConfigurationPanelProps> = ({ nodes, onUp
                 </td>
               </tr>
             ))}
-            {nodes.length === 0 && (
+             {nodes.length === 0 && (
               <tr>
                 <td colSpan={2} className="text-center py-4 text-gray-500">No nodes to configure.</td>
               </tr>

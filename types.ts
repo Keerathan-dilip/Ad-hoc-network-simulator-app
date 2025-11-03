@@ -70,10 +70,13 @@ export interface SimulationParameters {
   'End-to-end Delay (ms)': number;
   'Energy Consumption (J)': number;
   'Network Lifetime (hours)': number;
-  'Sustained Operations (cycles)': number;
-  'Scalability Index': number;
-  'Computational Efficiency (%)': number;
+  'Computational Efficiency (ops/J)': number;
   'Energy Efficiency': number;
   'Robustness Index': number;
   'Throughput (Mbps)': number;
+  'Responsiveness': number;
+  'Energy Conservation': number;
+  'Adaptability Rate': number;
+  'Scalability Index': number;
+  'Network Cycles'?: number;
 }
