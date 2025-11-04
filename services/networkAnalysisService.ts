@@ -9,15 +9,16 @@ const AVG_CYCLE_ENERGY_COST = 50; // Joules per abstract "cycle"
 interface PerformanceSet {
   pdr: number;
   delay: number;
-  energyConsumption: number; // This will now be treated as a RATE (J/hr)
-  networkLifetime: number; // Legacy, will be overridden
-  compEfficiency: number; // in ops/J
+  energyConsumption: number;
+  networkLifetime: number;
+  compEfficiency: number; 
   robustness: number;
   throughput: number;
   responsiveness: number;
   energyConservation: number;
   scalabilityIndex: number;
   adaptabilityRate: number;
+  energyEfficiency: number;
 }
 
 interface PerformanceTier {
@@ -30,28 +31,69 @@ interface PerformanceTier {
 const performanceTiers: PerformanceTier[] = [
     {
         range: [1, 50],
-        before: { pdr: 0.95, delay: 60, energyConsumption: 55, networkLifetime: 280 * 24, compEfficiency: 85, robustness: 0.85, throughput: 50, responsiveness: 1.7, energyConservation: 0.165, scalabilityIndex: 0.82, adaptabilityRate: 0.68 },
-        after:  { pdr: 0.99, delay: 55, energyConsumption: 50, networkLifetime: 350 * 24, compEfficiency: 115, robustness: 0.90, throughput: 85, responsiveness: 3.4, energyConservation: 0.22, scalabilityIndex: 0.88, adaptabilityRate: 0.90 }
+        before: { 
+            pdr: 0.92, delay: 60, energyConsumption: 55, networkLifetime: 68, 
+            compEfficiency: 90, robustness: 0.85, throughput: 7, energyEfficiency: 0.92,
+            // Copied from previous stable version
+            responsiveness: 1.7, energyConservation: 0.165, scalabilityIndex: 0.82, adaptabilityRate: 0.68 
+        },
+        after:  { 
+            pdr: 0.96, delay: 55, energyConsumption: 50, networkLifetime: 70, 
+            compEfficiency: 94, robustness: 0.90, throughput: 8, energyEfficiency: 0.96,
+            responsiveness: 3.4, energyConservation: 0.22, scalabilityIndex: 0.88, adaptabilityRate: 0.90 
+        }
     },
     {
         range: [50, 150],
-        before: { pdr: 0.919, delay: 95, energyConsumption: 240, networkLifetime: 232 * 24, compEfficiency: 80, robustness: 0.78, throughput: 55, responsiveness: 1.6, energyConservation: 0.15, scalabilityIndex: 0.78, adaptabilityRate: 0.64 },
-        after:  { pdr: 0.99, delay: 80, energyConsumption: 210, networkLifetime: 316 * 24, compEfficiency: 110, robustness: 0.85, throughput: 80, responsiveness: 3.3, energyConservation: 0.21, scalabilityIndex: 0.85, adaptabilityRate: 0.88 }
+        before: { 
+            pdr: 0.88, delay: 95, energyConsumption: 240, networkLifetime: 52, 
+            compEfficiency: 85, robustness: 0.78, throughput: 7.5, energyEfficiency: 0.88,
+            responsiveness: 1.6, energyConservation: 0.15, scalabilityIndex: 0.78, adaptabilityRate: 0.64 
+        },
+        after:  { 
+            pdr: 0.93, delay: 80, energyConsumption: 210, networkLifetime: 58, 
+            compEfficiency: 90, robustness: 0.85, throughput: 9, energyEfficiency: 0.93,
+            responsiveness: 3.3, energyConservation: 0.21, scalabilityIndex: 0.85, adaptabilityRate: 0.88 
+        }
     },
     {
         range: [150, 250],
-        before: { pdr: 0.88, delay: 120, energyConsumption: 480, networkLifetime: 150 * 24, compEfficiency: 78, robustness: 0.75, throughput: 50, responsiveness: 1.5, energyConservation: 0.14, scalabilityIndex: 0.75, adaptabilityRate: 0.62 },
-        after:  { pdr: 0.96, delay: 95, energyConsumption: 420, networkLifetime: 190 * 24, compEfficiency: 105, robustness: 0.83, throughput: 75, responsiveness: 3.2, energyConservation: 0.20, scalabilityIndex: 0.83, adaptabilityRate: 0.85 }
+        before: { 
+            pdr: 0.85, delay: 120, energyConsumption: 480, networkLifetime: 46, 
+            compEfficiency: 83, robustness: 0.75, throughput: 8, energyEfficiency: 0.85,
+            responsiveness: 1.5, energyConservation: 0.14, scalabilityIndex: 0.75, adaptabilityRate: 0.62 
+        },
+        after:  { 
+            pdr: 0.91, delay: 95, energyConsumption: 420, networkLifetime: 53, 
+            compEfficiency: 89, robustness: 0.83, throughput: 9.5, energyEfficiency: 0.91,
+            responsiveness: 3.2, energyConservation: 0.20, scalabilityIndex: 0.83, adaptabilityRate: 0.85 
+        }
     },
     {
         range: [250, 350],
-        before: { pdr: 0.85, delay: 150, energyConsumption: 720, networkLifetime: 90 * 24, compEfficiency: 75, robustness: 0.70, throughput: 45, responsiveness: 1.4, energyConservation: 0.13, scalabilityIndex: 0.70, adaptabilityRate: 0.60 },
-        after:  { pdr: 0.94, delay: 120, energyConsumption: 650, networkLifetime: 120 * 24, compEfficiency: 100, robustness: 0.80, throughput: 70, responsiveness: 3.1, energyConservation: 0.19, scalabilityIndex: 0.80, adaptabilityRate: 0.82 }
+        before: { 
+            pdr: 0.82, delay: 150, energyConsumption: 720, networkLifetime: 42, 
+            compEfficiency: 80, robustness: 0.70, throughput: 7.5, energyEfficiency: 0.82,
+            responsiveness: 1.4, energyConservation: 0.13, scalabilityIndex: 0.70, adaptabilityRate: 0.60 
+        },
+        after:  { 
+            pdr: 0.88, delay: 120, energyConsumption: 650, networkLifetime: 50, 
+            compEfficiency: 87, robustness: 0.80, throughput: 9, energyEfficiency: 0.88,
+            responsiveness: 3.1, energyConservation: 0.19, scalabilityIndex: 0.80, adaptabilityRate: 0.82 
+        }
     },
     {
         range: [350, 451], // Max nodes is 450
-        before: { pdr: 0.82, delay: 180, energyConsumption: 1100, networkLifetime: 60 * 24, compEfficiency: 70, robustness: 0.65, throughput: 40, responsiveness: 1.3, energyConservation: 0.12, scalabilityIndex: 0.65, adaptabilityRate: 0.58 },
-        after:  { pdr: 0.92, delay: 140, energyConsumption: 950, networkLifetime: 80 * 24, compEfficiency: 95, robustness: 0.78, throughput: 65, responsiveness: 3.0, energyConservation: 0.18, scalabilityIndex: 0.78, adaptabilityRate: 0.80 }
+        before: { 
+            pdr: 0.80, delay: 180, energyConsumption: 1100, networkLifetime: 36, 
+            compEfficiency: 75, robustness: 0.65, throughput: 9, energyEfficiency: 0.80,
+            responsiveness: 1.3, energyConservation: 0.12, scalabilityIndex: 0.65, adaptabilityRate: 0.58 
+        },
+        after:  { 
+            pdr: 0.87, delay: 140, energyConsumption: 950, networkLifetime: 45, 
+            compEfficiency: 85, robustness: 0.78, throughput: 11, energyEfficiency: 0.87,
+            responsiveness: 3.0, energyConservation: 0.18, scalabilityIndex: 0.78, adaptabilityRate: 0.80 
+        }
     }
 ];
 
@@ -116,7 +158,13 @@ class NetworkAnalysisService {
     const avgDegree = degrees.reduce((a, b) => a + b, 0) / nodeCount;
     const components = this.findNetworkComponents(nodes, connections);
 
-    // --- 1. Priority check for high-connectivity topologies (Mesh/Grid) ---
+    // --- 1. Check for explicit Cluster topology FIRST ---
+    // If the network was generated with cluster heads, it is a Cluster topology, even if meshed internally.
+    if (clusterHeadIds.length > 0) {
+        return 'Cluster Topology';
+    }
+
+    // --- 2. Priority check for high-connectivity topologies (Mesh/Grid) ---
     if (components.length <= 2 && avgDegree > 2.5) {
         const nodePositions = nodes.map(n => ({x: n.x, y: n.y}));
         const xCoords = [...new Set(nodePositions.map(p => p.x))].sort((a,b) => a - b);
@@ -135,20 +183,6 @@ class NetworkAnalysisService {
             }
         }
         return 'Mesh Topology';
-    }
-
-    // --- 2. Check for explicit Cluster topology ---
-    if (clusterHeadIds.length > 0) {
-        const endNodes = nodes.filter(n => !clusterHeadIds.includes(n.id) && n.type !== NetworkComponentType.BASE_STATION);
-        let clusterConnections = 0;
-        endNodes.forEach(en => {
-            if ((adjacency[en.id] || []).some(neighborId => clusterHeadIds.includes(neighborId))) {
-                clusterConnections++;
-            }
-        });
-        if (endNodes.length > 0 && clusterConnections / endNodes.length > 0.5) {
-            return 'Cluster Topology';
-        }
     }
 
     // --- 3. Stricter check for Star topology ---
@@ -390,16 +424,13 @@ class NetworkAnalysisService {
     const tradDataRaw = tier.before;
     const aiDataRaw = tier.after;
     
-    const totalEnergy = nodes.reduce((sum, node) => sum + (node.energyEfficiency / 100) * NODE_MAX_ENERGY, 0);
-
     const aiBased: SimulationParameters = {
         'Packet Delivery Ratio': aiDataRaw.pdr,
         'End-to-end Delay (ms)': aiDataRaw.delay,
         'Energy Consumption (J)': aiDataRaw.energyConsumption,
-        'Network Lifetime (hours)': totalEnergy > 0 && aiDataRaw.energyConsumption > 0 ? totalEnergy / aiDataRaw.energyConsumption : 0,
-        'Network Cycles': totalEnergy > 0 ? totalEnergy / (AVG_CYCLE_ENERGY_COST * 0.8) : 0, // AI is more efficient
+        'Network Lifetime (hours)': aiDataRaw.networkLifetime,
         'Computational Efficiency (ops/J)': aiDataRaw.compEfficiency,
-        'Energy Efficiency': 0.92,
+        'Energy Efficiency': aiDataRaw.energyEfficiency,
         'Robustness Index': aiDataRaw.robustness,
         'Throughput (Mbps)': aiDataRaw.throughput,
         'Responsiveness': aiDataRaw.responsiveness,
@@ -412,10 +443,9 @@ class NetworkAnalysisService {
         'Packet Delivery Ratio': tradDataRaw.pdr,
         'End-to-end Delay (ms)': tradDataRaw.delay,
         'Energy Consumption (J)': tradDataRaw.energyConsumption,
-        'Network Lifetime (hours)': totalEnergy > 0 && tradDataRaw.energyConsumption > 0 ? totalEnergy / tradDataRaw.energyConsumption : 0,
-        'Network Cycles': totalEnergy > 0 ? totalEnergy / AVG_CYCLE_ENERGY_COST : 0,
+        'Network Lifetime (hours)': tradDataRaw.networkLifetime,
         'Computational Efficiency (ops/J)': tradDataRaw.compEfficiency,
-        'Energy Efficiency': 0.87,
+        'Energy Efficiency': tradDataRaw.energyEfficiency,
         'Robustness Index': tradDataRaw.robustness,
         'Throughput (Mbps)': tradDataRaw.throughput,
         'Responsiveness': tradDataRaw.responsiveness,
@@ -435,6 +465,57 @@ class NetworkAnalysisService {
     }
     
     return { 'AI-Based': aiBased, 'Traditional': traditional };
+  }
+
+  public getEnvironmentalImpactText(parameter: keyof SimulationParameters, nodes: Node[]): { text: string; isCritical: boolean } {
+    if (nodes.length === 0) return { text: "No nodes to analyze for environmental impact.", isCritical: false };
+
+    const NORMAL_TEMP_THRESHOLD = 40;
+    const NORMAL_HUMIDITY_THRESHOLD = 70;
+    const NORMAL_INTERFERENCE_THRESHOLD = -80; // dBm, higher (less negative) is better
+
+    const avgTemp = nodes.reduce((sum, n) => sum + (n.sensorData?.temperature || 25), 0) / nodes.length;
+    const avgHumidity = nodes.reduce((sum, n) => sum + (n.sensorData?.humidity || 45), 0) / nodes.length;
+    const avgInterference = nodes.reduce((sum, n) => sum + (n.sensorData?.signalInterference || -90), 0) / nodes.length;
+
+    const isHot = avgTemp > NORMAL_TEMP_THRESHOLD;
+    const isHumid = avgHumidity > NORMAL_HUMIDITY_THRESHOLD;
+    const isHighInterference = avgInterference < NORMAL_INTERFERENCE_THRESHOLD;
+
+    const conditions: string[] = [];
+    if (isHot) conditions.push(`elevated temperatures (avg ${avgTemp.toFixed(1)}°C)`);
+    if (isHumid) conditions.push(`high humidity (avg ${avgHumidity.toFixed(1)}%)`);
+    if (isHighInterference) conditions.push(`strong signal interference (avg ${avgInterference.toFixed(0)} dBm)`);
+
+    let impactStatement = "";
+    if (conditions.length === 0) {
+        impactStatement = "Current environmental conditions are within normal operational parameters. Sensor data indicates a stable environment, which should not negatively impact network performance.";
+        return { text: impactStatement, isCritical: false };
+    }
+
+    const leadIn = `The network is currently operating under adverse conditions, including ${conditions.join(' and ')}. This has the following specific impacts:\n\n`;
+
+    switch (parameter) {
+        case 'Packet Delivery Ratio':
+        case 'Robustness Index':
+            impactStatement = "• **High Interference & Humidity:** Directly increases bit error rates by degrading signal quality. This causes more packets to become corrupted during transmission and be dropped, thus lowering PDR and overall robustness.\n• **Extreme Temperatures:** Can cause node electronics to malfunction or shut down, leading to intermittent link failures and significant packet loss.";
+            break;
+        case 'Throughput (Mbps)':
+        case 'Responsiveness':
+        case 'End-to-end Delay (ms)':
+            impactStatement = "• **High Interference & Humidity:** Forces the MAC layer to perform more retransmissions for each packet. This significantly increases the time it takes for data to be successfully delivered, which directly raises latency and lowers effective throughput.\n• **High Temperatures:** Can lead to thermal throttling of processors in nodes, slowing down packet processing and increasing queuing delays.";
+            break;
+        case 'Energy Consumption (J)':
+        case 'Energy Efficiency':
+        case 'Network Lifetime (hours)':
+            impactStatement = "• **High Interference & Humidity:** Increased packet loss requires constant retransmissions. Each retransmission attempt consumes significant power, draining node batteries at an accelerated rate and drastically reducing the network's operational lifetime.\n• **High Temperatures:** Nodes may need to activate cooling systems or operate less efficiently, increasing baseline power draw and further shortening their lifespan.";
+            break;
+        default:
+            impactStatement = "• Adverse environmental conditions generally degrade network performance by increasing packet loss, forcing energy-intensive retransmissions, and potentially causing hardware instability.";
+            break;
+    }
+
+    return { text: leadIn + impactStatement, isCritical: true };
   }
 }
 

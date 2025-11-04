@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { NetworkComponentType, NetworkTopology, SimulationParameters } from '../types';
 import { NodeIcon } from './NodeIcon';
 
@@ -13,6 +13,7 @@ interface ToolbarProps {
   isPacketSimulationMode: boolean;
   onTogglePacketSimulationMode: () => void;
   onDownloadReport: () => void;
+  onDownloadParameterGraph: (parameter: keyof SimulationParameters) => void;
   analysisPerformed: boolean;
   isDownloadingReport: boolean;
   onSaveNetwork: () => void;
@@ -58,6 +59,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
     isPacketSimulationMode,
     onTogglePacketSimulationMode,
     onDownloadReport,
+    onDownloadParameterGraph,
     analysisPerformed,
     isDownloadingReport,
     onSaveNetwork,
@@ -69,6 +71,24 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const [includeSwitches, setIncludeSwitches] = useState(false);
   const [numClusterHeads, setNumClusterHeads] = useState(3);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showGraphDropdown, setShowGraphDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowGraphDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownRef]);
+
+  const parametersToGraph: (keyof SimulationParameters)[] = [
+    'Packet Delivery Ratio', 'Energy Efficiency', 'Network Lifetime (hours)', 'Robustness Index'
+  ];
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
     e.dataTransfer.setData('application/reactflow', type);
@@ -92,11 +112,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
     <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 space-y-4">
        <style>{`
         @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+          from { opacity: 0; transform: translateY(5px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out forwards;
+          animation: fadeIn 0.2s ease-out forwards;
         }
       `}</style>
       <div>
@@ -272,18 +292,46 @@ const Toolbar: React.FC<ToolbarProps> = ({
             )}
             <span>{isAnalyzing ? 'Analyzing...' : 'Analyze Network'}</span>
         </button>
-          <button
-              onClick={onDownloadReport}
-              disabled={!analysisPerformed || isDownloadingReport}
-              className="w-full px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-          >
-              {isDownloadingReport ? (
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-              )}
-              <span>Full Report</span>
-          </button>
+        <div className="grid grid-cols-2 gap-2">
+            <button
+                onClick={onDownloadReport}
+                disabled={!analysisPerformed || isDownloadingReport}
+                className="w-full px-4 py-2 bg-blue-500 text-white text-sm font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                <span>Full Report</span>
+            </button>
+             <div className="relative" ref={dropdownRef}>
+                 <button
+                    onClick={() => setShowGraphDropdown(prev => !prev)}
+                    disabled={!analysisPerformed || isDownloadingReport}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
+                    <span>Graphs</span>
+                     <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+                {showGraphDropdown && (
+                    <div className="absolute bottom-full mb-2 w-full bg-gray-700 border border-cyan-500/20 rounded-lg shadow-lg z-10 animate-fadeIn">
+                        <ul className="text-sm text-white">
+                            {parametersToGraph.map(param => (
+                                <li key={param}>
+                                    <button
+                                        onClick={() => {
+                                            onDownloadParameterGraph(param);
+                                            setShowGraphDropdown(false);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-cyan-500/30 transition-colors duration-150 rounded-md"
+                                    >
+                                        {String(param).split('(')[0].trim()}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </div>
       </div>
     </div>
   );

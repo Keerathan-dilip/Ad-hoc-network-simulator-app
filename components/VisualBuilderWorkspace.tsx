@@ -15,7 +15,6 @@ import { networkGenerationService } from '../services/networkGenerationService';
 import SensorDataTable from './SensorDataTable';
 import LiveSensorControl from './LiveSensorControl';
 import LiveMonitoringCharts from './LiveMonitoringCharts';
-import NetworkManagementPanel from './NetworkManagementPanel';
 
 const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
 const PACKET_ANIMATION_DURATION_AI = 4000; // ms
@@ -692,7 +691,70 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       stopMobility();
     }
   };
+    const generateAndRenderGraph = async (parameter: keyof SimulationParameters) => {
+        const { createRoot } = await import('react-dom/client');
+        const { default: html2canvas } = await import('html2canvas');
+        
+        const chartContainer = document.createElement('div');
+        chartContainer.style.position = 'absolute';
+        chartContainer.style.left = '-9999px';
+        chartContainer.style.width = '800px';
+        chartContainer.style.height = '500px';
+        chartContainer.style.backgroundColor = '#1f2937'; // Dark background
+        chartContainer.style.padding = '20px';
+        document.body.appendChild(chartContainer);
 
+        const nodeCounts = [10, 20, 40, 60, 80, 100];
+        const graphData = [];
+        
+        const toGenerationTopology = (topology: string): NetworkTopology => {
+            const lower = topology.toLowerCase();
+            if (lower.includes('cluster-mesh')) return 'cluster-mesh';
+            if (lower.includes('cluster')) return 'cluster';
+            return 'random'; 
+        };
+        const generationTopology = toGenerationTopology(identifiedTopology || 'random');
+
+        for (const count of nodeCounts) {
+            const { nodes: simNodes, connections: simConnections } = networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
+            const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
+            graphData.push({ nodes: count, 'Enhanced': results['AI-Based'][parameter], 'Baseline': results['Traditional'][parameter] });
+        }
+
+        const currentUserDataPoint = simulationParams ? { nodes: nodes.length, 'Enhanced': simulationParams['AI-Based'][parameter], 'Baseline': simulationParams['Traditional'][parameter] } : null;
+
+        const lowerIsBetter = parameter === 'End-to-end Delay (ms)' || parameter === 'Energy Consumption (J)';
+        const unit = String(parameter).match(/\((.*?)\)/)?.[1] || '';
+        const paramName = String(parameter).split('(')[0].trim();
+
+        const ChartComponent = (
+            <div style={{width: '100%', height: '100%', fontFamily: 'sans-serif', color: '#e5e7eb' }}>
+                <h2 style={{color: '#e5e7eb', textAlign: 'center', fontSize: '22px', fontWeight: 'bold'}}>{paramName} vs Number of Nodes</h2>
+                <h3 style={{color: '#cbd5e1', textAlign: 'center', fontSize: '16px', marginBottom: '20px'}}>Enhanced Security & Efficiency</h3>
+                <ResponsiveContainer width="100%" height="85%">
+                <LineChart data={graphData} margin={{ top: 20, right: 40, left: 20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
+                    <XAxis dataKey="nodes" type="number" stroke="#9ca3af" domain={['dataMin', 'dataMax']} label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -15, fill: '#9ca3af' }} />
+                    <YAxis stroke="#9ca3af" domain={['auto', 'auto']} reversed={lowerIsBetter} label={{ value: `${paramName} (${unit})`, angle: -90, position: 'insideLeft', offset: -10, fill: '#9ca3af' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid #22d3ee' }} />
+                    <Legend wrapperStyle={{ color: '#e5e7eb' }}/>
+                    <Line type="monotone" dataKey="Enhanced" stroke="#22d3ee" strokeWidth={3} dot={{ r: 5, fill: '#22d3ee', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
+                    <Line type="monotone" dataKey="Baseline" stroke="#f97316" strokeWidth={3} dot={{ r: 5, fill: '#f97316', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
+                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Enhanced']} r={8} fill="#22d3ee" stroke="white" strokeWidth={2}/>}
+                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Baseline']} r={8} fill="#f97316" stroke="white" strokeWidth={2}/>}
+                </LineChart>
+                </ResponsiveContainer>
+            </div>
+        );
+        
+        const root = createRoot(chartContainer);
+        root.render(ChartComponent);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const canvas = await html2canvas(chartContainer, { scale: 2 });
+        root.unmount();
+        document.body.removeChild(chartContainer);
+        return canvas;
+    };
   const handleDownloadFullReport = async () => {
     const canvasEl = canvasRef.current;
     if (!canvasEl || !analysisContent || !simulationParams || !identifiedTopology) {
@@ -704,7 +766,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     try {
         const { default: html2canvas } = await import('html2canvas');
         const { default: jsPDF } = await import('jspdf');
-        const { createRoot } = await import('react-dom/client');
 
         const pdf = new jsPDF('p', 'pt', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -726,53 +787,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             pdf.text(lines, x, y, options);
             return y + (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor; // Increased line spacing
         };
-        
-        const renderSingleTable = (startY: number, headers: string[], data: string[][]) => {
-            let y = startY;
-            if (data.length === 0) return y;
-            const columnWidths = headers.map(() => contentWidth / headers.length);
-            
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(9);
-            let x = margin;
-            y = addPageBreaks(y + 12);
-            pdf.setFillColor(230, 230, 230); // Light gray header
-            pdf.rect(margin, y - 10, contentWidth, 12, 'F');
-            pdf.setTextColor(0, 0, 0);
-            headers.forEach((header, i) => {
-                pdf.text(header, x + 3, y);
-                x += columnWidths[i];
-            });
-            pdf.setTextColor(0, 0, 0); // Reset color
-            y += 5;
-            
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
-            
-            data.forEach((row, rowIndex) => {
-                let maxRowHeight = 0;
-                 // Pre-calculate height of the tallest cell in the row
-                row.forEach((cell, i) => {
-                    const lines = pdf.splitTextToSize(String(cell), columnWidths[i] - 6);
-                    const cellHeight = (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor;
-                    if (cellHeight > maxRowHeight) maxRowHeight = cellHeight;
-                });
-
-                y = addPageBreaks(y + maxRowHeight + 4); // +4 for padding
-                
-                pdf.setFillColor(rowIndex % 2 === 0 ? 255 : 245, 255, 255); // White/off-white striping
-                pdf.rect(margin, y - 10, contentWidth, maxRowHeight + 4, 'F');
-                
-                x = margin;
-                row.forEach((cell, i) => {
-                    renderText(String(cell), x + 3, y, { maxWidth: columnWidths[i] - 6 });
-                    x += columnWidths[i];
-                });
-                y += maxRowHeight + 4;
-            });
-            return y;
-        };
-
 
         const renderTitlePage = () => {
             pdf.setFontSize(28);
@@ -795,68 +809,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             pdf.setDrawColor(100, 100, 100);
             pdf.line(margin, y + 8, pdfWidth - margin, y + 8);
             return y + 30;
-        };
-        
-        const generateAndRenderGraph = async (parameter: keyof SimulationParameters) => {
-            const chartContainer = document.createElement('div');
-            chartContainer.style.position = 'absolute';
-            chartContainer.style.left = '-9999px';
-            chartContainer.style.width = '800px';
-            chartContainer.style.height = '500px';
-            chartContainer.style.backgroundColor = '#1f2937'; // Dark background
-            chartContainer.style.padding = '20px';
-            document.body.appendChild(chartContainer);
-
-            const nodeCounts = [10, 25, 50, 75, 100, 125, 150];
-            const graphData = [];
-            
-            const toGenerationTopology = (topology: string): NetworkTopology => {
-                const lower = topology.toLowerCase();
-                if (lower.includes('cluster-mesh')) return 'cluster-mesh';
-                if (lower.includes('cluster')) return 'cluster';
-                return 'random'; 
-            };
-            const generationTopology = toGenerationTopology(identifiedTopology || 'random');
-
-            for (const count of nodeCounts) {
-                const { nodes: simNodes, connections: simConnections } = networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
-                const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
-                graphData.push({ nodes: count, 'Enhanced': results['AI-Based'][parameter], 'Baseline': results['Traditional'][parameter] });
-            }
-
-            const currentUserDataPoint = { nodes: nodes.length, 'Enhanced': simulationParams['AI-Based'][parameter], 'Baseline': simulationParams['Traditional'][parameter] };
-
-            const lowerIsBetter = parameter === 'End-to-end Delay (ms)' || parameter === 'Energy Consumption (J)';
-            const unit = String(parameter).match(/\((.*?)\)/)?.[1] || '';
-            const paramName = String(parameter).split('(')[0].trim();
-
-            const ChartComponent = (
-                <div style={{width: '100%', height: '100%', fontFamily: 'sans-serif', color: '#e5e7eb' }}>
-                  <h2 style={{color: '#e5e7eb', textAlign: 'center', fontSize: '22px', fontWeight: 'bold'}}>{paramName} vs Number of Nodes</h2>
-                  <h3 style={{color: '#cbd5e1', textAlign: 'center', fontSize: '16px', marginBottom: '20px'}}>Enhanced Security & Efficiency</h3>
-                  <ResponsiveContainer width="100%" height="85%">
-                    <LineChart data={graphData} margin={{ top: 20, right: 40, left: 20, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
-                      <XAxis dataKey="nodes" type="number" stroke="#9ca3af" domain={['dataMin', 'dataMax']} label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -15, fill: '#9ca3af' }} />
-                      <YAxis stroke="#9ca3af" domain={['auto', 'auto']} reversed={lowerIsBetter} label={{ value: `${paramName} (${unit})`, angle: -90, position: 'insideLeft', offset: -10, fill: '#9ca3af' }} />
-                      <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid #22d3ee' }} />
-                      <Legend wrapperStyle={{ color: '#e5e7eb' }}/>
-                      <Line type="monotone" dataKey="Enhanced" stroke="#22d3ee" strokeWidth={3} dot={{ r: 5, fill: '#22d3ee', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
-                      <Line type="monotone" dataKey="Baseline" stroke="#f97316" strokeWidth={3} dot={{ r: 5, fill: '#f97316', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
-                      <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Enhanced']} r={8} fill="#22d3ee" stroke="white" strokeWidth={2}/>
-                      <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Baseline']} r={8} fill="#f97316" stroke="white" strokeWidth={2}/>
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-            );
-            
-            const root = createRoot(chartContainer);
-            root.render(ChartComponent);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const canvas = await html2canvas(chartContainer, { scale: 2 });
-            root.unmount();
-            document.body.removeChild(chartContainer);
-            return canvas;
         };
 
         // --- RENDER PDF CONTENT ---
@@ -899,8 +851,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         let sectionCounter = 3;
         for (const [index, param] of parametersToDetail.entries()) {
             yPos = renderSectionTitle(`${sectionCounter}. Detailed Analysis: ${param}`, margin, true);
-            const info = networkAnalysisService.getParameterInfoText(param);
-
+            
             const graphCanvas = await generateAndRenderGraph(param);
             const graphHeight = contentWidth * (graphCanvas.height / graphCanvas.width);
             if (yPos + graphHeight > pdfHeight - margin) {
@@ -909,73 +860,26 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             }
             pdf.addImage(graphCanvas.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, graphHeight);
             yPos += graphHeight + 15;
-
-            yPos = addPageBreaks(yPos);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(12);
-            yPos = renderText('Graph Interpretation', margin, yPos, {});
-            yPos += 5;
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(10);
-            yPos = renderText(info.interpretation, margin, yPos, {});
-            yPos += 15;
-
-            yPos = addPageBreaks(yPos);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(12);
-            yPos = renderText('Algorithm Comparison', margin, yPos, {});
-            yPos += 5;
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(10);
-            yPos = renderText(info.comparison, margin, yPos, {});
-            yPos += 15;
-
-            yPos = addPageBreaks(yPos);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(12);
-            yPos = renderText('Parameter Definition & Logic', margin, yPos, {});
-            yPos += 5;
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(10);
-            yPos = renderText(info.definition, margin, yPos, {});
-            yPos += 10;
-
-            if (info.formulaInfo && info.formulaInfo.breakdowns) {
-                for (const breakdown of info.formulaInfo.breakdowns) {
-                    yPos = addPageBreaks(yPos);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.setFontSize(11);
-                    yPos = renderText(breakdown.title, margin, yPos, {});
-                    yPos += 5;
-                    pdf.setFont('helvetica', 'normal');
-                    pdf.setFontSize(9);
-                    yPos = renderText(breakdown.description, margin, yPos, {});
-                    if (breakdown.formula) {
-                        yPos += 5;
-                        pdf.setFont('courier', 'bold');
-                        yPos = renderText(breakdown.formula, margin + 5, yPos, { maxWidth: contentWidth - 10 });
-                        pdf.setFont('helvetica', 'normal');
-                    }
-                    yPos += 8;
-                    yPos = renderSingleTable(yPos, breakdown.headers, breakdown.data);
-                    yPos += 15;
-                }
-            }
             
-            sectionCounter++;
+            yPos = addPageBreaks(yPos);
+            pdf.setFontSize(14);
+            pdf.text('Environmental Impact Analysis', margin, yPos);
+            pdf.setDrawColor(150, 150, 150);
+            pdf.line(margin, yPos + 6, pdfWidth - margin, yPos + 6);
+            yPos += 25;
 
-            // Add bridging text
-            const nextParam = parametersToDetail[index + 1];
-            if (nextParam) {
-                yPos = addPageBreaks(yPos + 10);
-                pdf.setFont('helvetica', 'italic');
-                pdf.setFontSize(9);
-                pdf.setTextColor(150, 150, 150);
-                const bridgeText = networkAnalysisService.getBridgingText(param, nextParam);
-                yPos = renderText(bridgeText, margin, yPos, { maxWidth: contentWidth });
-                yPos += 15;
-                pdf.setTextColor(0, 0, 0);
+            const impact = networkAnalysisService.getEnvironmentalImpactText(param, nodes);
+
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            if (impact.isCritical) {
+                pdf.setTextColor(239, 68, 68); // text-red-500
             }
+
+            yPos = renderText(impact.text, margin, yPos, {});
+            pdf.setTextColor(0, 0, 0);
+
+            sectionCounter++;
         }
 
         pdf.save("full_network_report.pdf");
@@ -988,154 +892,29 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     }
   };
 
-
   const handleDownloadParameterGraph = async (parameter: keyof SimulationParameters) => {
-    if (!simulationParams) {
-        alert("Please run an analysis first to generate data.");
+    if (!simulationParams || !identifiedTopology) {
+        alert("Please run a full analysis first to generate data for the graph.");
         return;
     }
+    
     setIsDownloadingReport(true);
     try {
-        const { createRoot } = await import('react-dom/client');
-        const { default: html2canvas } = await import('html2canvas');
-        const { default: jsPDF } = await import('jspdf');
-
-        const pdf = new jsPDF('p', 'pt', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const margin = 40;
-        const contentWidth = pdfWidth - margin * 2;
-        let yPos = margin;
-
-        const addPageBreaks = (currentY: number) => (currentY > pdfHeight - margin * 2) ? (pdf.addPage(), margin) : currentY;
-        const renderText = (text: string, x: number, y: number, options: any = {}) => {
-            const lines = pdf.splitTextToSize(text, options.maxWidth || contentWidth);
-            pdf.text(lines, x, y, options);
-            return y + (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor;
-        };
-        const renderSingleTable = (startY: number, headers: string[], data: string[][]) => {
-            let y = startY;
-            const columnWidths = headers.map(() => contentWidth / headers.length);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(9);
-            pdf.setFillColor(230, 230, 230);
-            pdf.rect(margin, y - 10, contentWidth, 12, 'F');
-            pdf.setTextColor(0, 0, 0);
-            headers.forEach((header, i) => pdf.text(header, margin + 3 + (i * columnWidths[i]), y));
-            y += 5;
-            pdf.setFont('helvetica', 'normal');
-            data.forEach((row, rowIndex) => {
-                let maxRowHeight = 0;
-                row.forEach((cell, i) => maxRowHeight = Math.max(maxRowHeight, (pdf.splitTextToSize(String(cell), columnWidths[i] - 6).length * pdf.getLineHeight() * 1.15) / pdf.internal.scaleFactor));
-                y = addPageBreaks(y + maxRowHeight + 4);
-                pdf.setFillColor(rowIndex % 2 === 0 ? 255 : 245, 255, 255);
-                pdf.rect(margin, y - 10, contentWidth, maxRowHeight + 4, 'F');
-                row.forEach((cell, i) => renderText(String(cell), margin + 3 + (i * columnWidths[i]), y, { maxWidth: columnWidths[i] - 6 }));
-                y += maxRowHeight + 4;
-            });
-            return y;
-        };
-
-        const chartContainer = document.createElement('div');
-        chartContainer.style.position = 'absolute';
-        chartContainer.style.left = '-9999px';
-        chartContainer.style.width = '800px';
-        chartContainer.style.height = '500px';
-        chartContainer.style.backgroundColor = '#111827';
-        chartContainer.style.padding = '20px';
-        document.body.appendChild(chartContainer);
-        
-        const nodeCounts = [10, 30, 50, 80, 120, 150];
-        const graphData = [];
-        
-        const currentTopology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
-        const toGenerationTopology = (topology: string): NetworkTopology => {
-            const lower = topology.toLowerCase();
-            if (lower.includes('cluster-mesh')) return 'cluster-mesh';
-            if (lower.includes('cluster')) return 'cluster';
-            return 'random';
-        };
-        const generationTopology = toGenerationTopology(currentTopology);
-
-        for (const count of nodeCounts) {
-            const { nodes: simNodes, connections: simConnections } = networkGenerationService.generateNetworkLayout(count, generationTopology, true, false, Math.max(2, Math.floor(count / 15)), { width: 1200, height: 800 });
-            const results = networkAnalysisService.simulatePerformance(generationTopology, simNodes, simConnections, []);
-            graphData.push({ nodes: count, 'AI-Based': results['AI-Based'][parameter], 'Traditional': results['Traditional'][parameter] });
-        }
-        
-        const ChartComponent = (
-            <div style={{width: '100%', height: '100%', color: '#e5e7eb', fontFamily: 'sans-serif' }}>
-              <h2 style={{color: '#e5e7eb', textAlign: 'center', fontSize: '22px', fontWeight: 'bold'}}>{String(parameter).split('(')[0].trim()} vs. Number of Nodes ({currentTopology})</h2>
-              <ResponsiveContainer width="100%" height="90%">
-                <LineChart data={graphData} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="nodes" stroke="#9ca3af" label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -5, fill: '#9ca3af' }} />
-                  <YAxis stroke="#9ca3af" label={{ value: String(parameter), angle: -90, position: 'insideLeft', fill: '#9ca3af' }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} />
-                  <Legend wrapperStyle={{ color: '#e5e7eb' }}/>
-                  <Line type="monotone" dataKey="AI-Based" stroke="#22d3ee" strokeWidth={2} />
-                  <Line type="monotone" dataKey="Traditional" stroke="#f97316" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-        );
-
-        const root = createRoot(chartContainer);
-        root.render(ChartComponent);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const canvas = await html2canvas(chartContainer, { backgroundColor: '#111827', useCORS: true, scale: 2 });
-        root.unmount();
-        document.body.removeChild(chartContainer);
-
-        // --- PDF Generation ---
-        const info = networkAnalysisService.getParameterInfoText(parameter);
-        
-        pdf.setFontSize(22);
-        pdf.text(`In-Depth Analysis: ${parameter}`, pdfWidth / 2, yPos, { align: 'center' });
-        yPos += 40;
-        
-        const graphHeight = contentWidth * (canvas.height / canvas.width);
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, graphHeight);
-        yPos += graphHeight + 20;
-
-        yPos = addPageBreaks(yPos);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(14);
-        yPos = renderText('1. Definition', margin, yPos, {});
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(10);
-        yPos = renderText(info.definition, margin, yPos, {});
-        yPos += 20;
-
-        for (const [index, breakdown] of info.formulaInfo.breakdowns.entries()) {
-            yPos = addPageBreaks(yPos);
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(14);
-            yPos = renderText(`${index + 2}. ${breakdown.title}`, margin, yPos, {});
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(10);
-            yPos = renderText(breakdown.description, margin, yPos, {});
-            if (breakdown.formula) {
-                yPos += 5;
-                pdf.setFont('courier', 'bold');
-                yPos = renderText(breakdown.formula, margin + 5, yPos, {});
-                pdf.setFont('helvetica', 'normal');
-            }
-            yPos += 8;
-            yPos = renderSingleTable(yPos, breakdown.headers, breakdown.data);
-            yPos += 15;
-        }
-
-        pdf.save(`${String(parameter).replace(/[^a-zA-Z]/g, '_')}_Analysis.pdf`);
-
+        const canvas = await generateAndRenderGraph(parameter);
+        const link = document.createElement('a');
+        const paramName = String(parameter).split('(')[0].trim().replace(/\s+/g, '_');
+        link.download = `${paramName}_scalability_graph.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     } catch (error) {
-        console.error("Failed to generate parameter graph PDF:", error);
-        alert("An error occurred while generating the graph PDF.");
+        console.error(`Failed to generate graph for ${parameter}:`, error);
+        alert(`An error occurred while generating the graph for ${parameter}.`);
     } finally {
         setIsDownloadingReport(false);
     }
   };
-
 
   const handleReconstruct = useCallback(async () => {
     saveSnapshot();
@@ -1444,6 +1223,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   isPacketSimulationMode={isPacketSimulationMode}
                   onTogglePacketSimulationMode={togglePacketSimulationMode}
                   onDownloadReport={handleDownloadFullReport}
+                  onDownloadParameterGraph={handleDownloadParameterGraph}
                   analysisPerformed={!!analysisContent}
                   isDownloadingReport={isDownloadingReport}
                   onSaveNetwork={handleSaveNetwork}
@@ -1552,13 +1332,11 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                       simulationData={simulationParams}
                       isUpdating={isReportUpdating}
                       onDownloadParameterGraph={handleDownloadParameterGraph}
-                    />
-                    <LiveMonitoringCharts initialData={simulationParams} />
-                    <NetworkManagementPanel
                       nodes={nodes}
                       onReconstruct={handleReconstruct}
                       onUpdateNodeIp={updateNodeIp}
                     />
+                    <LiveMonitoringCharts initialData={simulationParams} />
                   </>
               )}
               {activeInfoTab === 'environment' && (
