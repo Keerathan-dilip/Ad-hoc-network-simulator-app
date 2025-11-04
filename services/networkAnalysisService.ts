@@ -266,10 +266,10 @@ class NetworkAnalysisService {
                     description: isEnhanced
                         ? "The AI model learns the most reliable routes by rewarding successful packet deliveries. It uses a Q-learning approach to assign a 'quality' value to routing decisions, prioritizing paths with a higher historical success rate and stability."
                         : "Traditional protocols like AODV (Ad-hoc On-demand Distance Vector) select the shortest path based on hop count. This path might not be the most stable, leading to packet loss if a link breaks.",
-                    formula: isEnhanced ? "Q(s,a) ← Q(s,a) + α[R + γ * max Q(s',a') - Q(s,a)]" : "PDR = (Total Packets Received / Total Packets Sent)",
+                    formula: isEnhanced ? "Q(s,a) \u2190 Q(s,a) + \u03B1[R + \u03B3 * max Q(s',a') - Q(s,a)]" : "PDR = (Total Packets Received / Total Packets Sent)",
                     headers: isEnhanced ? ['Component', 'Description'] : ['Step', 'Action', 'Example'],
                     data: isEnhanced
-                        ? [["Q(s,a)", "The 'Quality' of forwarding a packet from node 's' to neighbor 'a'."], ['R (Reward)', 'A positive reward (+1) is given for acknowledged deliveries, incentivizing reliable paths.'], ['γ (Discount)', 'Balances immediate vs. future rewards, promoting long-term stability.']]
+                        ? [["Q(s,a)", "The 'Quality' of forwarding a packet from node 's' to neighbor 'a'."], ['R (Reward)', 'A positive reward (+1) is given for acknowledged deliveries, incentivizing reliable paths.'], ['\u03B3 (Discount)', 'Balances immediate vs. future rewards, promoting long-term stability.']]
                         : [["1. Route Discovery", "Source node broadcasts a Route Request (RREQ) packet.", "Node 1 sends RREQ for Node 10."], ["2. Path Selection", "Destination replies along the first-arrived RREQ's path (shortest hops).", "Node 10 replies via path 1-4-7-10."], ["3. Data Transmission", "Packets are sent along the established route.", "Data flows from 1 to 10."], ["4. Link Failure", "If a link breaks (e.g., 4-7), packets are dropped until a new route is found.", "Packets lost until a new path is discovered."]]
                 },
                 throughput: {
@@ -288,7 +288,7 @@ class NetworkAnalysisService {
                     description: isEnhanced 
                         ? "The AI model minimizes delay by learning to avoid nodes with high queuing delays and links with low signal quality. The reward function penalizes longer transit times."
                         : "Choosing the shortest path in hops can lead to significant queuing delays at busy 'crossroad' nodes, increasing the overall end-to-end transit time.",
-                    formula: isEnhanced ? "Cost(Path) = Σ (TransmissionDelay + PropagationDelay + QueuingDelay)" : "Avg. Delay = Σ (Packet Rx Time - Tx Time) / Total Packets Received",
+                    formula: isEnhanced ? "Cost(Path) = \u03A3 (TransmissionDelay + PropagationDelay + QueuingDelay)" : "Avg. Delay = \u03A3 (Packet Rx Time - Tx Time) / Total Packets Received",
                     headers: ['Step', 'Action', 'Example'],
                      data: isEnhanced
                         ? [["1. Real-time Monitoring", "Each node measures packet acknowledgment times and queue lengths.", "Node 5 notes that packets via neighbor 7 take 50ms."], ["2. Cost Calculation", "The AI assigns a 'cost' to each potential link based on this real-time latency.", "The link 5->7 is assigned a higher cost."], ["3. Optimal Path Selection", "The AI chooses the path with the lowest cumulative latency cost, even if it has more hops.", "It prefers path 5-9-10 (60ms) over 5-7-10 (80ms)."], ["4. Proactive Rerouting", "If latency on a path starts to increase, the AI seamlessly shifts traffic to a better route.", "Traffic is moved before the link becomes unusable."]]
@@ -299,7 +299,7 @@ class NetworkAnalysisService {
                     description: isEnhanced 
                         ? "The AI model is explicitly trained to conserve energy. The reward function penalizes routes that use nodes with low battery or require high transmission power, extending network lifetime."
                         : "Traditional protocols are generally not energy-aware. Their focus on shortest paths can overuse central nodes, depleting their batteries quickly and causing the network to fragment.",
-                    formula: isEnhanced ? "Reward = k * (1 / EnergyCost) + (RemainingBattery%)" : "Total Consumption = Σ (Energy Spent by each node)",
+                    formula: isEnhanced ? "Reward = k * (1 / EnergyCost) + (RemainingBattery%)" : "Total Consumption = \u03A3 (Energy Spent by each node)",
                     headers: ['Step', 'Action', 'Example'],
                     data: isEnhanced
                         ? [["1. Energy State Sharing", "Nodes periodically share their remaining battery levels with neighbors.", "Node 6 reports 35% battery."], ["2. Cost-Based Routing", "The AI's Q-learning model incorporates energy as a primary cost factor for route selection.", "The Q-value for using Node 6 is heavily penalized."], ["3. Bypass Weak Nodes", "The AI selects a path that avoids the low-battery node, even if it's slightly longer.", "Path routes through 5-8-10 instead of 5-6-10."], ["4. Balanced Load", "This strategy distributes the load, preventing any single node from draining too quickly and extending the entire network's life.", "All nodes deplete energy at a more uniform rate."]]
@@ -310,7 +310,7 @@ class NetworkAnalysisService {
                     description: isEnhanced 
                         ? "The AI's core policy is to maximize the time until the *first* critical node fails. It achieves this by intelligently balancing traffic load based on node energy levels, ensuring no single node is depleted prematurely."
                         : "In traditional routing, there is no concept of lifetime management. Critical nodes on the shortest paths are overused until they fail, leading to a much shorter operational lifespan for the network as a whole.",
-                    formula: isEnhanced ? "Maximize(T) such that E_i(T) > E_threshold for all i" : "Lifetime ≈ min(InitialEnergy_i / ConsumptionRate_i)",
+                    formula: isEnhanced ? "Maximize(T) such that E_i(T) > E_threshold for all i" : "Lifetime \u2248 min(InitialEnergy_i / ConsumptionRate_i)",
                     headers: ['Step', 'Action', 'Example'],
                     data: isEnhanced
                         ? [["1. Identify Critical Nodes", "The AI identifies nodes whose failure would have the largest impact on network connectivity.", "Node 6 is identified as a critical bridge node."], ["2. Set Energy Thresholds", "The AI avoids using nodes that are approaching a critical energy level (e.g., < 25%).", "Traffic is diverted away from Node 6."], ["3. Distribute Load", "Traffic is routed through alternative, less-critical paths to allow the weak node to conserve power.", "A 3-hop path is used to spare the 2-hop path's critical node."], ["4. Uniform Energy Drain", "This results in a slower, more balanced energy drain across the network, significantly extending its functional lifetime.", "The first node failure is delayed by hours or days."]]
@@ -340,63 +340,24 @@ class NetworkAnalysisService {
                 },
             };
             
-            switch(param) {
-                case 'Packet Delivery Ratio': return common.pdr;
-                case 'Throughput (Mbps)': return common.throughput;
-                case 'End-to-end Delay (ms)': return common.delay;
-                case 'Energy Consumption (J)': return common.energy;
-                case 'Network Lifetime (hours)': return common.lifetime;
-                case 'Robustness Index': return common.robustness;
-                case 'Scalability Index': return common.scalability;
-                default: return null;
-            }
+            const paramKey = String(parameter).split('(')[0].trim().toLowerCase().replace(/\s+/g, '');
+            if (paramKey.includes('packetdelivery')) return { traditional: common.pdr, enhanced: common.pdr };
+            if (paramKey.includes('throughput')) return { traditional: common.throughput, enhanced: common.throughput };
+            if (paramKey.includes('delay')) return { traditional: common.delay, enhanced: common.delay };
+            if (paramKey.includes('energyconsumption')) return { traditional: common.energy, enhanced: common.energy };
+            if (paramKey.includes('networklifetime')) return { traditional: common.lifetime, enhanced: common.lifetime };
+            if (paramKey.includes('robustness')) return { traditional: common.robustness, enhanced: common.robustness };
+            if (paramKey.includes('scalability')) return { traditional: common.scalability, enhanced: common.scalability };
+            
+            return null;
         };
 
-        const info = {
-            'Packet Delivery Ratio': {
-                definition: "Packet Delivery Ratio (PDR) is the ratio of data packets successfully delivered to a destination compared to the number of packets sent by the source. It is a fundamental measure of network reliability and efficiency. A higher PDR indicates a more stable and effective network.",
-                interpretation: "The graph shows how PDR changes as the network size increases. A higher, flatter line indicates a more reliable protocol that maintains performance under scale. The current network's PDR is marked on the graph for both protocols, showing their relative reliability for this specific topology.",
-                comparison: "The AI-based algorithm consistently maintains a higher PDR. Its reinforcement learning model adapts to network changes, finding more stable routes and avoiding congested or failing nodes. Traditional protocols, often choosing the shortest path, are more susceptible to link breakages, resulting in higher packet loss, especially in larger or more dynamic networks."
-            },
-            'Throughput (Mbps)': {
-                definition: "Throughput measures the rate of successful data transmission through a network, typically in Megabits per second (Mbps). It reflects the actual bandwidth available to the application, accounting for factors like overhead, latency, and packet loss.",
-                interpretation: "This graph illustrates the network's capacity to handle data traffic as it grows. A higher throughput value indicates better efficiency. The position of the current network's performance shows how its current configuration impacts data rate compared to a scaled scenario.",
-                comparison: "The AI-based protocol achieves higher throughput by intelligently balancing loads and selecting routes with greater available capacity, avoiding the bottlenecks that can form in traditional shortest-path routing. This leads to more efficient use of the network's resources and better performance for data-intensive applications."
-            },
-            'End-to-end Delay (ms)': {
-                definition: "End-to-end Delay (or latency) is the time it takes for a packet to travel from its source to its destination across the network, measured in milliseconds (ms). It includes transmission, propagation, and queuing delays at intermediate nodes.",
-                interpretation: "Lower delay is critical for real-time applications. This graph shows that as the network grows, delay tends to increase. The AI protocol's ability to manage congestion helps keep this increase in check. The current network's delay is highlighted.",
-                comparison: "The AI model significantly reduces delay by learning to avoid congested nodes and inefficient paths. While traditional protocols might select a path with fewer hops, the AI considers the actual transit time, resulting in faster and more predictable delivery times."
-            },
-            'Energy Consumption (J)': {
-                definition: "Energy Consumption measures the total energy, in Joules (J), used by all nodes in the network to transmit, receive, and process data over a period. It is a critical metric for battery-powered ad hoc networks, directly impacting their operational lifespan.",
-                interpretation: "This graph demonstrates the energy efficiency of the protocols under scale. Lower consumption is vital for extending the operational life of the network. The current network's energy footprint is shown, providing a baseline for optimization.",
-                comparison: "The AI's routing algorithm is designed for energy conservation. It prioritizes routes that use energy-efficient nodes and avoids over-utilizing specific nodes, leading to balanced energy drain and significantly lower overall consumption compared to energy-agnostic traditional protocols."
-            },
-            'Network Lifetime (hours)': {
-                definition: "Network Lifetime is an estimate of how long the network can remain operational before the first critical node fails due to battery depletion, measured in hours. It is a crucial system-level metric for long-term deployments, especially in sensor networks or disaster recovery scenarios.",
-                interpretation: "A longer lifetime indicates a more sustainable and reliable network. This graph shows how the protocols' energy management strategies impact the network's longevity as it scales. The AI's focus on balanced energy drain results in a much longer operational life.",
-                comparison: "The AI protocol explicitly works to maximize network lifetime by treating energy as a precious resource. It balances the load across all nodes to prevent premature failure of critical nodes. Traditional protocols often create 'hotspots' on central nodes, causing them to fail early and drastically shortening the network's useful life."
-            },
-            'Robustness Index': {
-                definition: "The Robustness Index is a measure of a network's ability to maintain connectivity and performance in the face of node failures or link degradation. A higher index indicates greater resilience and a better ability to self-heal and adapt to changing conditions.",
-                interpretation: "This graph shows the protocol's ability to withstand network disruptions as the number of nodes increases. The AI protocol's high and stable robustness index indicates its superior adaptability. The current network's robustness score reflects its resilience to potential failures.",
-                comparison: "The AI-based protocol is proactive; it continuously monitors link quality and can predict potential failures, allowing it to reroute traffic before a link breaks. Traditional protocols are reactive, only seeking new routes after a failure has occurred, which leads to packet loss and lower robustness."
-            },
-            'Scalability Index': {
-                definition: "The Scalability Index measures how well a routing protocol's performance is maintained as the number of nodes in the network increases. It's a key indicator of a protocol's suitability for large-scale deployments. A higher index means performance degrades less as the network grows.",
-                interpretation: "This graph illustrates how performance (a composite of throughput and delay) is affected by network size. The AI's flatter curve indicates better scalability, making it suitable for large networks, while the traditional protocol's performance drops off more steeply.",
-                comparison: "The AI's enhanced scalability comes from its use of hierarchical and adaptive routing. By forming clusters, it reduces the amount of control message overhead that typically floods large flat networks. Traditional protocols often suffer from broadcast storms during route discovery in large networks, which degrades performance."
-            }
-        };
-
-        const result = info[parameter as keyof typeof info] || { definition: "N/A", interpretation: "N/A", comparison: "N/A" };
+        const breakdown = makeBreakdown(false, parameter);
+        if (!breakdown) return null;
         
         return {
-            ...result,
-            formulaInfo: {
-                breakdowns: [makeBreakdown(false, parameter), makeBreakdown(true, parameter)].filter(Boolean) as any[]
-            }
+            traditional: makeBreakdown(false, parameter)?.traditional,
+            enhanced: makeBreakdown(true, parameter)?.enhanced
         };
     }
 

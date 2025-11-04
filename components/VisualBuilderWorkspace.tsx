@@ -774,20 +774,25 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const contentWidth = pdfWidth - margin * 2;
         let yPos = margin;
 
-        const addPageBreaks = (currentY: number) => {
-            if (currentY > pdfHeight - margin * 2) {
+        const addPageBreaks = (currentY: number, neededHeight: number = 40) => {
+            if (currentY > pdfHeight - margin - neededHeight) {
                 pdf.addPage();
                 return margin;
             }
             return currentY;
         };
-
+        
         const renderText = (text: string, x: number, y: number, options: any = {}) => {
             const lines = pdf.splitTextToSize(text, options.maxWidth || contentWidth);
-            pdf.text(lines, x, y, options);
-            return y + (lines.length * (pdf.getLineHeight() * 1.15)) / pdf.internal.scaleFactor; // Increased line spacing
-        };
+            const lineHeight = (pdf.getLineHeight() * 1.15) / pdf.internal.scaleFactor;
+            const neededHeight = lines.length * lineHeight;
+            
+            y = addPageBreaks(y, neededHeight);
 
+            pdf.text(lines, x, y, options);
+            return y + neededHeight;
+        };
+        
         const renderTitlePage = () => {
             pdf.setFontSize(28);
             pdf.text('Ad Hoc Network Simulation Report', pdfWidth / 2, pdfHeight / 2 - 60, { align: 'center' });
@@ -803,7 +808,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 pdf.addPage();
                 y = margin;
             }
-            y = addPageBreaks(y);
+            y = addPageBreaks(y, 40);
             pdf.setFontSize(18);
             pdf.text(title, margin, y);
             pdf.setDrawColor(100, 100, 100);
@@ -811,13 +816,72 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             return y + 30;
         };
 
+        const renderSubSectionTitle = (title: string, y: number) => {
+            y = addPageBreaks(y, 25);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            pdf.setTextColor(60, 60, 60);
+            y = renderText(title, margin, y, {});
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFont('helvetica', 'normal');
+            return y + 5;
+        };
+        
+        const renderBreakdown = (breakdown: any, y: number) => {
+            if (!breakdown) return y;
+            y = renderSubSectionTitle(breakdown.title, y);
+            pdf.setFontSize(10);
+            y = renderText(breakdown.description, margin, y, {});
+            y += 10;
+            
+            pdf.setFont('courier', 'bold');
+            y = renderText(`Formula: ${breakdown.formula}`, margin, y, {});
+            pdf.setFont('helvetica', 'normal');
+            y += 10;
+
+            // Render text-based table
+            if (breakdown.headers && breakdown.data) {
+                const colWidths = [120, 200, contentWidth - 320];
+                pdf.setFont('helvetica', 'bold');
+                y = addPageBreaks(y, 20);
+                pdf.text(breakdown.headers[0], margin, y);
+                pdf.text(breakdown.headers[1], margin + colWidths[0], y);
+                if (breakdown.headers[2]) pdf.text(breakdown.headers[2], margin + colWidths[0] + colWidths[1], y);
+                y += pdf.getLineHeight() / pdf.internal.scaleFactor;
+                pdf.setDrawColor(150, 150, 150);
+                pdf.line(margin, y, pdfWidth - margin, y);
+                y += 5;
+                pdf.setFont('helvetica', 'normal');
+
+                breakdown.data.forEach((row: string[]) => {
+                    const rowText1 = pdf.splitTextToSize(row[0], colWidths[0] - 10);
+                    const rowText2 = pdf.splitTextToSize(row[1], colWidths[1] - 10);
+                    const rowText3 = row[2] ? pdf.splitTextToSize(row[2], colWidths[2] - 10) : [];
+                    const lineCount = Math.max(rowText1.length, rowText2.length, rowText3.length);
+                    const rowHeight = lineCount * (pdf.getLineHeight() * 1.15) / pdf.internal.scaleFactor;
+                    
+                    y = addPageBreaks(y, rowHeight);
+                    
+                    pdf.text(rowText1, margin, y);
+                    pdf.text(rowText2, margin + colWidths[0], y);
+                    if (rowText3.length > 0) pdf.text(rowText3, margin + colWidths[0] + colWidths[1], y);
+                    
+                    y += rowHeight + 5;
+                });
+            }
+            return y + 15;
+        };
+
         // --- RENDER PDF CONTENT ---
         renderTitlePage();
         yPos = renderSectionTitle('1. Network Topology Visualization', margin);
         const canvasImage = await html2canvas(canvasEl, { backgroundColor: '#1f2937', useCORS: true, logging: false, scale: 2 });
-        pdf.addImage(canvasImage.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, contentWidth * (canvasImage.height / canvasImage.width));
+        const imgHeight = contentWidth * (canvasImage.height / canvasImage.width);
+        yPos = addPageBreaks(yPos, imgHeight);
+        pdf.addImage(canvasImage.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, imgHeight);
+        yPos += imgHeight + 20;
 
-        yPos = renderSectionTitle('2. AI-Powered Analysis', margin, true);
+        yPos = renderSectionTitle('2. AI-Powered Analysis', yPos, true);
         const sections: { [key: string]: string[] } = {};
         let currentSection = '';
         analysisContent.split('\n').forEach(line => {
@@ -831,7 +895,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             }
         });
         Object.entries(sections).forEach(([title, content]) => {
-            yPos = addPageBreaks(yPos);
+            yPos = addPageBreaks(yPos, 40);
             pdf.setFont('helvetica', 'bold');
             pdf.setFontSize(12);
             yPos = renderText(title, margin, yPos, {});
@@ -854,30 +918,35 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             
             const graphCanvas = await generateAndRenderGraph(param);
             const graphHeight = contentWidth * (graphCanvas.height / graphCanvas.width);
-            if (yPos + graphHeight > pdfHeight - margin) {
-                pdf.addPage();
-                yPos = margin;
-            }
+            yPos = addPageBreaks(yPos, graphHeight);
             pdf.addImage(graphCanvas.toDataURL('image/png'), 'PNG', margin, yPos, contentWidth, graphHeight);
-            yPos += graphHeight + 15;
+            yPos += graphHeight + 20;
             
-            yPos = addPageBreaks(yPos);
-            pdf.setFontSize(14);
-            pdf.text('Environmental Impact Analysis', margin, yPos);
-            pdf.setDrawColor(150, 150, 150);
-            pdf.line(margin, yPos + 6, pdfWidth - margin, yPos + 6);
-            yPos += 25;
+            const paramInfo = networkAnalysisService.getParameterInfoText(param);
+            if(paramInfo) {
+                yPos = renderBreakdown(paramInfo.traditional, yPos);
+                yPos = renderBreakdown(paramInfo.enhanced, yPos);
+            }
 
+            yPos = renderSubSectionTitle('Environmental Impact Analysis', yPos);
             const impact = networkAnalysisService.getEnvironmentalImpactText(param, nodes);
-
             pdf.setFont('helvetica', 'normal');
             pdf.setFontSize(10);
             if (impact.isCritical) {
                 pdf.setTextColor(239, 68, 68); // text-red-500
             }
-
             yPos = renderText(impact.text, margin, yPos, {});
             pdf.setTextColor(0, 0, 0);
+            
+            const nextParam = parametersToDetail[index + 1];
+            if (nextParam) {
+                const bridgeText = networkAnalysisService.getBridgingText(param, nextParam);
+                yPos = addPageBreaks(yPos, 40) + 10;
+                pdf.setFont('helvetica', 'italic');
+                pdf.setFontSize(10);
+                yPos = renderText(bridgeText, margin, yPos, {});
+                pdf.setFont('helvetica', 'normal');
+            }
 
             sectionCounter++;
         }
