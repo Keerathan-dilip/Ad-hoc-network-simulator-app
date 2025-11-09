@@ -211,6 +211,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({
                                         <th scope="col" className="px-3 py-2">Node #</th>
                                         <th scope="col" className="px-3 py-2">Type</th>
                                         <th scope="col" className="px-3 py-2">Energy Status</th>
+                                        <th scope="col" className="px-3 py-2">Energy Spent (J)</th>
                                         <th scope="col" className="px-3 py-2">Status</th>
                                     </tr>
                                 </thead>
@@ -222,13 +223,14 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({
                                                 <td className="px-3 py-2 font-medium">Node {index + 1}</td>
                                                 <td className="px-3 py-2">{getNodeTypeLabel(node.type)}</td>
                                                 <td className="px-3 py-2">{node.energyEfficiency}%</td>
+                                                <td className="px-3 py-2">{node.energySpent}</td>
                                                 <td className={`px-3 py-2 font-semibold ${status.color}`}>{status.text}</td>
                                             </tr>
                                         );
                                     })}
                                     {nodes.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-4 text-gray-500">No nodes in network.</td>
+                                            <td colSpan={5} className="text-center py-4 text-gray-500">No nodes in network.</td>
                                         </tr>
                                     )}
                                 </tbody>
