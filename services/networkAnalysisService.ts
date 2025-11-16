@@ -384,6 +384,18 @@ class NetworkAnalysisService {
     
     const tradDataRaw = tier.before;
     const aiDataRaw = tier.after;
+
+    const simDurationInSeconds = 150.0; // Based on C++ sim time
+
+    const calculateCycles = (data: PerformanceSet): number => {
+        if (data.networkLifetime <= 0 || AVG_CYCLE_ENERGY_COST <= 0 || simDurationInSeconds <= 0) {
+            return 0;
+        }
+        const cyclesInSim = data.energyConsumption / AVG_CYCLE_ENERGY_COST;
+        const cyclesPerSecond = cyclesInSim / simDurationInSeconds;
+        const totalCycles = cyclesPerSecond * data.networkLifetime * 3600;
+        return Math.round(totalCycles);
+    };
     
     const aiBased: SimulationParameters = {
         'Packet Delivery Ratio': aiDataRaw.pdr,
@@ -398,6 +410,7 @@ class NetworkAnalysisService {
         'Energy Conservation': aiDataRaw.energyConservation,
         'Adaptability Rate': aiDataRaw.adaptabilityRate,
         'Scalability Index': aiDataRaw.scalabilityIndex,
+        'Network Cycles': calculateCycles(aiDataRaw),
     };
 
     const traditional: SimulationParameters = {
@@ -413,6 +426,7 @@ class NetworkAnalysisService {
         'Energy Conservation': tradDataRaw.energyConservation,
         'Adaptability Rate': tradDataRaw.adaptabilityRate,
         'Scalability Index': tradDataRaw.scalabilityIndex,
+        'Network Cycles': calculateCycles(tradDataRaw),
     };
 
     if (maliciousNodeIds.length > 0) {

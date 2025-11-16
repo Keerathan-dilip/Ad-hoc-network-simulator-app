@@ -732,16 +732,17 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 <h2 style={{color: '#e5e7eb', textAlign: 'center', fontSize: '22px', fontWeight: 'bold'}}>{paramName} vs Number of Nodes</h2>
                 <h3 style={{color: '#cbd5e1', textAlign: 'center', fontSize: '16px', marginBottom: '20px'}}>Enhanced Security & Efficiency</h3>
                 <ResponsiveContainer width="100%" height="85%">
+                {/* FIX: The `isAnimationActive` prop is not valid on LineChart. It has been moved to the individual Line components to prevent animations during static chart generation. */}
                 <LineChart data={graphData} margin={{ top: 20, right: 40, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
                     <XAxis dataKey="nodes" type="number" stroke="#9ca3af" domain={['dataMin', 'dataMax']} label={{ value: 'Number of Nodes', position: 'insideBottom', offset: -15, fill: '#9ca3af' }} />
                     <YAxis stroke="#9ca3af" domain={['auto', 'auto']} reversed={lowerIsBetter} label={{ value: `${paramName} (${unit})`, angle: -90, position: 'insideLeft', offset: -10, fill: '#9ca3af' }} />
-                    <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid #22d3ee' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#111827', border: '1px solid #22d3ee' }} isAnimationActive={false} />
                     <Legend wrapperStyle={{ color: '#e5e7eb' }}/>
-                    <Line type="monotone" dataKey="Enhanced" stroke="#22d3ee" strokeWidth={3} dot={{ r: 5, fill: '#22d3ee', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
-                    <Line type="monotone" dataKey="Baseline" stroke="#f97316" strokeWidth={3} dot={{ r: 5, fill: '#f97316', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} />
-                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Enhanced']} r={8} fill="#22d3ee" stroke="white" strokeWidth={2}/>}
-                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Baseline']} r={8} fill="#f97316" stroke="white" strokeWidth={2}/>}
+                    <Line type="monotone" dataKey="Enhanced" stroke="#22d3ee" strokeWidth={3} dot={{ r: 5, fill: '#22d3ee', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="Baseline" stroke="#f97316" strokeWidth={3} dot={{ r: 5, fill: '#f97316', stroke: '#1f2937', strokeWidth: 2 }} activeDot={{r: 8}} isAnimationActive={false} />
+                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Enhanced']} r={8} fill="#22d3ee" stroke="white" strokeWidth={2} />}
+                    {currentUserDataPoint && <ReferenceDot x={currentUserDataPoint.nodes} y={currentUserDataPoint['Baseline']} r={8} fill="#f97316" stroke="white" strokeWidth={2} />}
                 </LineChart>
                 </ResponsiveContainer>
             </div>

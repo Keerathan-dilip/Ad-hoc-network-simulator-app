@@ -99,6 +99,28 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({
         if (node.energyEfficiency < 85) return { text: 'Weaker', color: 'text-orange-400' };
         return { text: 'Healthy', color: 'text-green-400' };
     };
+    
+    const aiCycles = aiData['Network Cycles'] || 0;
+    const tradCycles = tradData['Network Cycles'] || 0;
+
+    const formatCycles = (cycles: number) => {
+        return cycles > 999 ? `${(cycles / 1000).toFixed(1)}k` : cycles;
+    };
+
+    const lifetimeChartData = [
+        { 
+            name: 'AI-Based', 
+            Lifetime: Math.round(aiData['Network Lifetime (hours)']), 
+            fill: '#22d3ee',
+            label: `${Math.round(aiData['Network Lifetime (hours)'])} hrs (~${formatCycles(aiCycles)} cycles)`
+        },
+        { 
+            name: 'Traditional', 
+            Lifetime: Math.round(tradData['Network Lifetime (hours)']), 
+            fill: '#f97316',
+            label: `${Math.round(tradData['Network Lifetime (hours)'])} hrs (~${formatCycles(tradCycles)} cycles)`
+        },
+    ];
 
     return (
         <div ref={ref} className={`bg-gray-800 rounded-lg rounded-tl-none shadow-2xl border border-cyan-500/20 p-6 transition-opacity duration-300 ${isUpdating ? 'opacity-50' : 'opacity-100'}`}>
@@ -145,10 +167,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({
                     <ResponsiveContainer width="100%" height="90%">
                         <BarChart 
                             layout="vertical" 
-                            data={[
-                                { name: 'AI-Based', Lifetime: Math.round(aiData['Network Lifetime (hours)']), fill: '#22d3ee' },
-                                { name: 'Traditional', Lifetime: Math.round(tradData['Network Lifetime (hours)']), fill: '#f97316' },
-                            ]}
+                            data={lifetimeChartData}
                             margin={{ top: 5, right: 35, left: 10, bottom: 5 }}
                         >
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -156,7 +175,7 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({
                             <YAxis type="category" dataKey="name" stroke="#9ca3af" width={70} />
                             <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} cursor={{fill: 'rgba(255, 255, 255, 0.1)'}} />
                             <Bar dataKey="Lifetime" barSize={25} radius={[0, 5, 5, 0]}>
-                                 <LabelList dataKey="Lifetime" position="right" style={{ fill: '#e5e7eb', fontSize: 14, fontWeight: 'bold' }} formatter={(value: number) => `${value} hrs`} />
+                                 <LabelList dataKey="label" position="right" style={{ fill: '#e5e7eb', fontSize: 12, fontWeight: 'bold' }} />
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
