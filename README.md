@@ -1,20 +1,459 @@
-# Overview Of This Ad-hoc Network Simulator app.
-This project focuses on enhancing the efficiency, reliability, and robustness of ad hoc networks through a systematic simulation-based framework. It addresses the challenges of dynamic topology, node failures, energy constraints, and unstable communication links in decentralized wireless networks. The proposed approach integrates network initialization, topology formation, and adaptive routing to enable stable multi-hop communication. Weak or unreliable nodes are identified and classified based on performance and energy behavior to prevent network degradation. Self-healing and adaptive rerouting mechanisms are employed to maintain communication continuity under changing conditions. The system evaluates network performance using key metrics such as packet delivery ratio, delay, throughput, energy consumption, robustness, and adaptability. Visualization and script generation provide clear insight into network behavior and ensure reproducibility of results. Overall, the project demonstrates an effective framework for improving ad hoc network performance in infrastructure-independent environments.
+# Ad Hoc Network Simulator
 
+## Overview
 
-# Run and deploy your AI Studio app
+The **Ad Hoc Network Simulator** is an intelligent simulation platform designed to analyze, optimize, and visualize the performance of Mobile Ad Hoc Networks (MANETs) in dynamic and infrastructure-less environments. The simulator provides an interactive interface for designing network topologies, configuring simulation parameters, evaluating routing performance, and generating reproducible simulation scripts.
 
-This contains everything you need to run your app locally.
+Unlike conventional simulators that require manual scripting, this application combines a graphical network builder with automated code generation, allowing users to create, simulate, and analyze wireless ad hoc networks efficiently. The platform also incorporates intelligent self-healing mechanisms to improve network reliability by detecting weak or failed nodes and automatically reorganizing communication paths.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Pd3vOobytR2vCWvML-tWbcE96M9FY8fZ
+The project is intended for academic research, engineering education, and network performance analysis, providing detailed visualization of communication behavior under different network conditions.
 
-## Run Locally
+---
 
-**Prerequisites:**  Node.js
+# Project Objectives
 
+The primary objective of this project is to develop a comprehensive simulation framework capable of:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Simulating infrastructure-less wireless ad hoc networks.
+- Creating customizable network topologies.
+- Evaluating routing efficiency under dynamic conditions.
+- Detecting weak, malicious, or failed nodes.
+- Implementing adaptive rerouting and self-healing mechanisms.
+- Measuring network performance using standard evaluation metrics.
+- Automatically generating reproducible simulation scripts.
+- Providing intuitive graphical visualization for network analysis.
+
+---
+
+# Key Features
+
+## Interactive Network Builder
+
+- Drag-and-drop node placement
+- Automatic topology generation
+- Manual topology customization
+- Wireless communication range visualization
+- Link creation and deletion
+
+Supported topologies include:
+
+- Mesh
+- Cluster
+- Star
+- Ring
+- Hybrid
+- Random
+
+---
+
+## Intelligent Network Initialization
+
+The simulator initializes the network by configuring:
+
+- Number of nodes
+- Node positions
+- Transmission range
+- Initial energy
+- Mobility parameters
+- Communication links
+- Network boundaries
+
+The initialization process ensures consistent and reproducible simulation scenarios.
+
+---
+
+## Adaptive Routing Engine
+
+The routing module establishes efficient communication paths between source and destination nodes using adaptive routing strategies.
+
+Features include:
+
+- Multi-hop communication
+- Dynamic route discovery
+- Route maintenance
+- Alternate path generation
+- Loop avoidance
+- Route optimization
+
+---
+
+## Weak Node Detection
+
+The simulator continuously evaluates every node based on multiple performance indicators including:
+
+- Remaining battery energy
+- Packet forwarding capability
+- Link reliability
+- Connectivity strength
+- Packet loss
+- Node participation
+
+Nodes with degraded performance are classified as weak nodes to prevent network instability.
+
+---
+
+## Self-Healing Network Mechanism
+
+One of the major features of the simulator is its self-healing capability.
+
+When communication failures occur due to:
+
+- Node failures
+- Energy depletion
+- Link breakage
+- Dynamic topology changes
+
+the simulator automatically:
+
+- Detects the failure
+- Removes unstable routes
+- Finds alternative communication paths
+- Reorganizes the topology
+- Restores network connectivity
+
+This significantly improves network robustness.
+
+---
+
+## Performance Analysis
+
+The simulator evaluates the network using standard MANET performance metrics.
+
+### Packet Delivery Ratio (PDR)
+
+Measures the percentage of packets successfully delivered to their destinations.
+
+Higher values indicate better routing efficiency.
+
+---
+
+### End-to-End Delay
+
+Calculates the average time required for packets to travel from source to destination.
+
+Lower delay indicates faster communication.
+
+---
+
+### Throughput
+
+Represents the successful data transfer rate across the network.
+
+Measured in:
+
+- kbps
+- Mbps
+
+depending on simulation settings.
+
+---
+
+### Packet Loss
+
+Measures the number of packets lost during communication.
+
+Lower packet loss indicates improved network reliability.
+
+---
+
+### Routing Overhead
+
+Evaluates the amount of routing control traffic generated by the protocol.
+
+Lower routing overhead improves network efficiency.
+
+---
+
+### Energy Consumption
+
+Calculates the energy consumed by nodes during:
+
+- Transmission
+- Reception
+- Idle listening
+- Routing operations
+
+---
+
+### Network Lifetime
+
+Measures the operational lifetime of the network before critical node failures occur.
+
+---
+
+### Robustness Index
+
+Evaluates the network's ability to maintain connectivity despite failures.
+
+---
+
+### Adaptability Index
+
+Measures how efficiently the network responds to dynamic topology changes.
+
+---
+
+# Visualization Module
+
+The visualization engine provides real-time graphical representation of:
+
+- Network topology
+- Node movement
+- Communication links
+- Active routes
+- Weak nodes
+- Failed nodes
+- Packet transmission
+- Network reorganization
+
+This allows users to observe network behavior throughout the simulation.
+
+---
+
+# Automatic Script Generation
+
+The simulator automatically generates simulation scripts compatible with network simulators.
+
+Generated files include:
+
+- TCL scripts
+- AWK scripts
+- Configuration files
+
+Benefits include:
+
+- Reproducibility
+- Easy experimentation
+- Reduced manual coding
+- Faster simulation setup
+
+---
+
+# Simulation Workflow
+
+The simulation follows the workflow below:
+
+1. Configure simulation parameters.
+2. Create or generate the network topology.
+3. Initialize all nodes.
+4. Establish communication links.
+5. Discover routing paths.
+6. Start packet transmission.
+7. Monitor node energy and link quality.
+8. Detect weak or failed nodes.
+9. Trigger self-healing and adaptive rerouting.
+10. Collect performance metrics.
+11. Generate simulation reports and scripts.
+12. Visualize network behavior.
+
+---
+
+# Technology Stack
+
+### Frontend
+
+- React
+- TypeScript
+- HTML5
+- CSS3
+
+### Visualization
+
+- Canvas API
+- SVG Graphics
+- Interactive UI Components
+
+### Backend
+
+- Node.js
+
+### AI Integration
+
+- Google Gemini API
+
+### Development Tools
+
+- npm
+- Vite
+
+---
+
+# Project Structure
+
+```
+AdHoc-Network-Simulator/
+│
+├── public/
+│
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── services/
+│   ├── simulation/
+│   ├── topology/
+│   ├── routing/
+│   ├── visualization/
+│   ├── metrics/
+│   ├── utilities/
+│   └── assets/
+│
+├── scripts/
+│
+├── generated/
+│
+├── .env.local
+├── package.json
+├── README.md
+└── vite.config.ts
+```
+
+---
+
+# Installation
+
+## Prerequisites
+
+- Node.js (Latest LTS Version)
+- npm
+
+---
+
+## Clone Repository
+
+```bash
+git clone https://github.com/yourusername/ad-hoc-network-simulator.git
+
+cd ad-hoc-network-simulator
+```
+
+---
+
+## Install Dependencies
+
+```bash
+npm install
+```
+
+---
+
+## Configure Environment Variables
+
+Create a file named:
+
+```
+.env.local
+```
+
+Add your Gemini API Key:
+
+```
+GEMINI_API_KEY=YOUR_API_KEY
+```
+
+---
+
+## Run the Development Server
+
+```bash
+npm run dev
+```
+
+The application will start locally.
+
+---
+
+# Build for Production
+
+```bash
+npm run build
+```
+
+---
+
+# Preview Production Build
+
+```bash
+npm run preview
+```
+
+---
+
+# Research Applications
+
+The simulator is suitable for:
+
+- Mobile Ad Hoc Networks (MANET)
+- Disaster Management Communication
+- Military Communication Networks
+- Emergency Response Systems
+- Vehicular Ad Hoc Networks (VANET)
+- Wireless Sensor Networks
+- Smart City Communication
+- IoT Mesh Networks
+- Academic Research
+- Network Performance Evaluation
+
+---
+
+# Future Enhancements
+
+Planned improvements include:
+
+- NS-2 integration
+- NS-3 integration
+- AODV implementation
+- DSR implementation
+- DSDV implementation
+- OLSR implementation
+- Energy harvesting models
+- Machine Learning based routing optimization
+- AI-assisted topology optimization
+- Real-time mobility models
+- 3D network visualization
+- Network security analysis
+- Intrusion detection
+- Blockchain-enabled trust management
+- Cloud-based simulation execution
+
+---
+
+# Educational Value
+
+This simulator provides an effective learning platform for understanding:
+
+- Wireless Networking
+- Mobile Ad Hoc Networks
+- Routing Protocols
+- Dynamic Topology Management
+- Graph Algorithms
+- Network Optimization
+- Self-Healing Networks
+- Performance Evaluation
+- Communication Systems
+- Computer Networks
+
+---
+
+# Contributing
+
+Contributions are welcome.
+
+To contribute:
+
+1. Fork the repository.
+2. Create a new feature branch.
+3. Commit your changes.
+4. Push the branch.
+5. Submit a Pull Request.
+
+---
+
+# License
+
+This project is intended for educational and research purposes.
+
+---
+
+# Acknowledgements
+
+This project was developed as part of research on improving the efficiency, robustness, and reliability of wireless ad hoc networks through intelligent simulation, adaptive routing, and self-healing network mechanisms. It serves as a practical platform for network analysis, visualization, and performance evaluation in infrastructure-independent communication environments.
